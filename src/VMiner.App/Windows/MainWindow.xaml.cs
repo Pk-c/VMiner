@@ -19,23 +19,30 @@ public partial class MainWindow : Window
     private readonly VocabularyStore _vocabularyStore;
     private readonly GlobalCaptureService _capture;
     private readonly ResultWindow _resultWindow;
+    private readonly ModelDownloadService _modelDownloader = new();
+    private readonly bool _testMode;
     private CancellationTokenSource? _analysisCancellation;
+    private CancellationTokenSource? _modelDownloadCancellation;
     private readonly CancellationTokenSource _lifetimeCancellation = new();
     private IReadOnlyList<VocabularyEntry> _collectionEntries = [];
     private int _requestId;
     private bool _reallyClosing;
     private bool _shutdownStarted;
+    private bool _modelDownloadInProgress;
 
     public MainWindow() : this(false)
     {
     }
 
-    internal MainWindow(bool testMode)
+    internal MainWindow(bool testMode, string? translationModelOverride = null)
     {
+        _testMode = testMode;
         InitializeComponent();
         SourceInitialized += (_, _) => NativeMethods.EnableDarkTitleBar(
             new WindowInteropHelper(this).Handle);
         _config = _configService.Load();
+        if (!string.IsNullOrWhiteSpace(translationModelOverride))
+            _config.TranslationModel = translationModelOverride;
         _analysis = new AnalysisService(_config);
         _vocabularyStore = new VocabularyStore(_config.VocabularyDatabasePath);
         _resultWindow = new ResultWindow(
@@ -65,6 +72,16 @@ public partial class MainWindow : Window
 
     internal (int FrameCount, bool IsPlaying) TestMiningAnimation()
         => _resultWindow.TestMiningAnimation();
+
+    internal (bool IsVisible, bool CanDownload, string Status) TestMissingModelPanel()
+    {
+        UpdateModelStatus();
+        UpdateLayout();
+        return (
+            ModelDownloadPanel.Visibility == Visibility.Visible,
+            ModelDownloadButton.IsEnabled,
+            ModelStatusText.Text);
+    }
 
     private async void WindowLoaded(object sender, RoutedEventArgs e)
     {
@@ -379,11 +396,35 @@ public partial class MainWindow : Window
         var available = _analysis.Translation.ModelAvailable;
         if (!available)
         {
-            ModelStatusText.Text = "TranslateGemma model not found in models";
+            ModelStatusText.Text =
+                "Translation unavailable — the TranslateGemma model is not installed.";
             ModelStatusIndicator.Fill = (Brush)FindResource("DangerBrush");
+            ModelDownloadPanel.Visibility = Visibility.Visible;
+            if (!_modelDownloadInProgress)
+            {
+                var partialPath = _analysis.Translation.ModelPath + ".download";
+                var partialBytes = File.Exists(partialPath)
+                    ? Math.Min(new FileInfo(partialPath).Length,
+                        ModelDownloadService.ExpectedFileSize)
+                    : 0;
+                ModelDownloadProgress.IsIndeterminate = false;
+                ModelDownloadProgress.Value = partialBytes * 100d /
+                                              ModelDownloadService.ExpectedFileSize;
+                ModelDownloadButton.Content = partialBytes > 0
+                    ? "Resume download"
+                    : "Download model";
+                ModelDownloadButton.IsEnabled = true;
+                ModelDownloadProgressText.Text = partialBytes > 0
+                    ? $"{ModelDownloadService.FormatBytes(partialBytes)} / " +
+                      $"{ModelDownloadService.FormatBytes(
+                          ModelDownloadService.ExpectedFileSize)} saved"
+                    : $"Download size: {ModelDownloadService.FormatBytes(
+                        ModelDownloadService.ExpectedFileSize)}";
+            }
             return;
         }
 
+        ModelDownloadPanel.Visibility = Visibility.Collapsed;
         if (!_analysis.Translation.IsLoaded)
         {
             ShowModelLoading();
@@ -394,8 +435,105 @@ public partial class MainWindow : Window
         ModelStatusIndicator.Fill = (Brush)FindResource("SuccessBrush");
     }
 
+    private async void DownloadModelClicked(object sender, RoutedEventArgs e)
+    {
+        if (_modelDownloadInProgress)
+        {
+            ModelDownloadButton.IsEnabled = false;
+            ModelDownloadButton.Content = "Cancelling…";
+            _modelDownloadCancellation?.Cancel();
+            return;
+        }
+
+        if (_analysis.Translation.ModelAvailable)
+        {
+            await InitializeTranslationModelAsync();
+            return;
+        }
+
+        _modelDownloadCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            _lifetimeCancellation.Token);
+        _modelDownloadInProgress = true;
+        ModelDownloadPanel.Visibility = Visibility.Visible;
+        ModelDownloadButton.Content = "Cancel download";
+        ModelDownloadButton.IsEnabled = true;
+        ModelDownloadProgress.IsIndeterminate = false;
+        ModelDownloadProgress.Value = 0;
+        ModelDownloadProgressText.Text = "Connecting to Hugging Face…";
+        ModelStatusText.Text = "Downloading TranslateGemma…";
+        ModelStatusIndicator.Fill = (Brush)FindResource("AccentBrush");
+        StatusText.Text = "Downloading the local translation model in the background…";
+
+        var progress = new Progress<ModelDownloadProgress>(UpdateModelDownloadProgress);
+        try
+        {
+            await _modelDownloader.DownloadAsync(
+                _analysis.Translation.ModelPath,
+                progress,
+                _modelDownloadCancellation.Token);
+            if (_reallyClosing)
+                return;
+
+            ModelDownloadProgress.Value = 100;
+            ModelDownloadProgressText.Text = "Download complete — verifying and loading…";
+            StatusText.Text = "TranslateGemma downloaded. Loading the model…";
+            await InitializeTranslationModelAsync();
+        }
+        catch (OperationCanceledException) when (!_lifetimeCancellation.IsCancellationRequested)
+        {
+            ModelStatusText.Text = "Model download paused. Translation remains unavailable.";
+            ModelStatusIndicator.Fill = (Brush)FindResource("DangerBrush");
+            ModelDownloadProgressText.Text = "Partial download kept for automatic resume.";
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception)
+        {
+            ModelStatusText.Text = $"Model download failed: {exception.Message}";
+            ModelStatusIndicator.Fill = (Brush)FindResource("DangerBrush");
+            ModelDownloadProgressText.Text = "The partial download was kept when possible.";
+            StatusText.Text = "Translation is unavailable. OCR and furigana still work.";
+        }
+        finally
+        {
+            _modelDownloadInProgress = false;
+            _modelDownloadCancellation?.Dispose();
+            _modelDownloadCancellation = null;
+            if (!_reallyClosing && !_analysis.Translation.ModelAvailable)
+            {
+                ModelDownloadPanel.Visibility = Visibility.Visible;
+                ModelDownloadButton.Content = File.Exists(
+                    _analysis.Translation.ModelPath + ".download")
+                    ? "Resume download"
+                    : "Retry download";
+                ModelDownloadButton.IsEnabled = true;
+            }
+        }
+    }
+
+    private void UpdateModelDownloadProgress(ModelDownloadProgress progress)
+    {
+        ModelDownloadProgress.IsIndeterminate = progress.TotalBytes <= 0;
+        ModelDownloadProgress.Value = progress.Percentage;
+        if (progress.IsVerifying)
+        {
+            ModelDownloadProgressText.Text = "Verifying SHA-256 integrity…";
+            return;
+        }
+        var total = progress.TotalBytes > 0
+            ? $" / {ModelDownloadService.FormatBytes(progress.TotalBytes)}"
+            : "";
+        var speed = progress.BytesPerSecond > 0
+            ? $" • {ModelDownloadService.FormatBytes(progress.BytesPerSecond)}/s"
+            : "";
+        ModelDownloadProgressText.Text =
+            $"{ModelDownloadService.FormatBytes(progress.BytesReceived)}{total}{speed}";
+    }
+
     private void ShowModelLoading()
     {
+        ModelDownloadPanel.Visibility = Visibility.Collapsed;
         ModelStatusText.Text = "Loading TranslateGemma model…";
         ModelStatusIndicator.Fill = (Brush)FindResource("AccentBrush");
     }
@@ -432,9 +570,13 @@ public partial class MainWindow : Window
 
         _shutdownStarted = true;
         _reallyClosing = true;
-        CollectConfiguration();
-        _configService.Save(_config);
+        if (!_testMode)
+        {
+            CollectConfiguration();
+            _configService.Save(_config);
+        }
         _analysisCancellation?.Cancel();
+        _modelDownloadCancellation?.Cancel();
         _lifetimeCancellation.Cancel();
         _capture.Dispose();
         _analysis.Dispose();

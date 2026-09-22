@@ -130,6 +130,8 @@
 
         <TabControl x:Name="MainTabs" Grid.Row="1" SelectionChanged="MainTabsChanged">
             <TabItem Header="Capture &amp; model">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
                 <Border Margin="24,0,24,14" Padding="20" CornerRadius="10"
                         Background="{StaticResource PanelBrush}"
                         BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
@@ -185,6 +187,40 @@
                                     <TextBlock Text="Local English translation" FontWeight="SemiBold" />
                                     <TextBlock x:Name="ModelStatusText" Margin="0,2,0,0"
                                                FontSize="12" Foreground="{StaticResource MutedBrush}" />
+                                    <Border x:Name="ModelDownloadPanel" Margin="0,12,0,0"
+                                            Padding="12" CornerRadius="7"
+                                            Background="{StaticResource AccentTintBrush}"
+                                            BorderBrush="{StaticResource AccentBorderBrush}"
+                                            BorderThickness="1" Visibility="Collapsed">
+                                        <StackPanel>
+                                            <TextBlock TextWrapping="Wrap"
+                                                       Foreground="{StaticResource WarmTextBrush}"
+                                                       Text="Translation and English vocabulary definitions require the local TranslateGemma model." />
+                                            <ProgressBar x:Name="ModelDownloadProgress"
+                                                         Margin="0,11,0,7" Height="7"
+                                                         Minimum="0" Maximum="100" Value="0"
+                                                         Foreground="{StaticResource AccentBrush}"
+                                                         Background="{StaticResource PanelRaisedBrush}" />
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock x:Name="ModelDownloadProgressText"
+                                                           VerticalAlignment="Center"
+                                                           FontSize="11"
+                                                           Foreground="{StaticResource MutedBrush}" />
+                                                <Button x:Name="ModelDownloadButton" Grid.Column="1"
+                                                        Margin="12,0,0,0" Padding="13,6"
+                                                        Content="Download model"
+                                                        Click="DownloadModelClicked" />
+                                            </Grid>
+                                            <TextBlock Margin="0,8,0,0" FontSize="10"
+                                                       Foreground="{StaticResource MutedBrush}"
+                                                       TextWrapping="Wrap"
+                                                       Text="2.32 GiB from Hugging Face. By downloading and using it, you agree to the Gemma Terms of Use." />
+                                        </StackPanel>
+                                    </Border>
                                 </StackPanel>
                             </Grid>
                         </Border>
@@ -210,6 +246,7 @@
                         </Border>
                     </Grid>
                 </Border>
+                </ScrollViewer>
             </TabItem>
 
             <TabItem x:Name="CollectionTab" Header="Collection">

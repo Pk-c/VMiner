@@ -1,5 +1,10 @@
 using System.Windows;
 using System.IO;
+using System.Net;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Security.Cryptography;
+using System.Text;
 using VMiner.Models;
 using VMiner.Services;
 using VMiner.Windows;
@@ -103,8 +108,130 @@ public partial class App : Application
             return;
         }
 
+        if (e.Args is ["--missing-model-ui-test", var missingModelReportPath])
+        {
+            var exitCode = 0;
+            MainWindow? testWindow = null;
+            string report;
+            try
+            {
+                testWindow = new MainWindow(
+                    testMode: true,
+                    translationModelOverride: @"models\missing-model-ui-test.gguf");
+                MainWindow = testWindow;
+                testWindow.Show();
+                var state = testWindow.TestMissingModelPanel();
+                if (!state.IsVisible || !state.CanDownload ||
+                    !state.Status.Contains("unavailable", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException(
+                        "The missing-model warning or download action is not visible.");
+                }
+                report = "Missing-model UI OK (warning, download button, and progress bar visible)";
+            }
+            catch (Exception exception)
+            {
+                exitCode = 1;
+                report = exception.ToString();
+            }
+
+            File.WriteAllText(Path.GetFullPath(missingModelReportPath), report);
+            if (testWindow is not null)
+                testWindow.Close();
+            else
+                Shutdown(exitCode);
+            return;
+        }
+
+        if (e.Args is ["--model-download-test", var downloadReportPath])
+        {
+            var exitCode = 0;
+            string report;
+            var destination = Path.GetFullPath(downloadReportPath) + ".download-test.gguf";
+            var partial = destination + ".download";
+            try
+            {
+                var payload = Encoding.UTF8.GetBytes(string.Concat(
+                    Enumerable.Repeat("VMiner model download integrity test.\n", 65_536)));
+                var expectedHash = Convert.ToHexString(SHA256.HashData(payload));
+                await File.WriteAllBytesAsync(partial, payload[..131_072]);
+
+                var handler = new ModelDownloadTestHandler(payload);
+                using var client = new HttpClient(handler);
+                var downloader = new ModelDownloadService(
+                    client,
+                    new Uri("https://download.test/model.gguf"),
+                    payload.LongLength,
+                    expectedHash);
+                var progress = new DownloadProgressRecorder();
+                await downloader.DownloadAsync(destination, progress);
+
+                var downloaded = await File.ReadAllBytesAsync(destination);
+                if (!payload.AsSpan().SequenceEqual(downloaded) ||
+                    !handler.ResumeRequested || progress.Latest?.Percentage != 100)
+                {
+                    throw new InvalidOperationException(
+                        "The resumable model download test did not complete correctly.");
+                }
+                report = $"Model download OK ({downloaded.Length:N0} bytes, resume + SHA-256)";
+            }
+            catch (Exception exception)
+            {
+                exitCode = 1;
+                report = exception.ToString();
+            }
+            finally
+            {
+                if (File.Exists(destination))
+                    File.Delete(destination);
+                if (File.Exists(partial))
+                    File.Delete(partial);
+            }
+
+            File.WriteAllText(Path.GetFullPath(downloadReportPath), report);
+            Shutdown(exitCode);
+            return;
+        }
+
         MainWindow = new MainWindow();
         MainWindow.Show();
         MainWindow.Activate();
+    }
+
+    private sealed class DownloadProgressRecorder : IProgress<ModelDownloadProgress>
+    {
+        public ModelDownloadProgress? Latest { get; private set; }
+
+        public void Report(ModelDownloadProgress value) => Latest = value;
+    }
+
+    private sealed class ModelDownloadTestHandler(byte[] payload) : HttpMessageHandler
+    {
+        public bool ResumeRequested { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var start = request.Headers.Range?.Ranges.SingleOrDefault()?.From ?? 0;
+            if (start < 0 || start >= payload.LongLength)
+                throw new InvalidOperationException("Invalid byte range in download test.");
+
+            ResumeRequested = start > 0;
+            var responsePayload = payload.AsSpan((int)start).ToArray();
+            var response = new HttpResponseMessage(
+                ResumeRequested ? HttpStatusCode.PartialContent : HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(responsePayload),
+            };
+            response.Content.Headers.ContentLength = responsePayload.LongLength;
+            if (ResumeRequested)
+            {
+                response.Content.Headers.ContentRange = new ContentRangeHeaderValue(
+                    start, payload.LongLength - 1, payload.LongLength);
+            }
+            return Task.FromResult(response);
+        }
     }
 }

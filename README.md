@@ -21,17 +21,24 @@ taskbar. The Windows close button and **Exit** both shut down the application co
 
 ## Local translation
 
-The translation engine uses a TranslateGemma 4B model in GGUF format. Place the local model
-at the following path:
+The translation engine uses a TranslateGemma 4B model in GGUF format. When the model is
+missing, the main screen explains that translation is unavailable and offers to download it
+from Hugging Face. The download runs in the background with progress, speed, cancellation,
+automatic resume, and a SHA-256 integrity check.
+
+The downloaded model is stored at:
 
 ```text
 models\translategemma-4b-it-Q4_K_M.gguf
 ```
 
-The model is excluded from version control because of its size and license. Without it, OCR
-and furigana remain available, and the interface reports that translation is unavailable.
-LLamaSharp loads the model through its Vulkan backend; no captured text is sent over the
-Internet.
+The 2.32 GiB model is excluded from version control because of its size and license. Without
+it, OCR and furigana remain available. LLamaSharp loads the model through its Vulkan backend;
+no captured text is sent over the Internet.
+
+VMiner downloads the Q4_K_M quantization from
+[tatsuyaaaaaaa/translategemma-4b-it-gguf](https://huggingface.co/tatsuyaaaaaaa/translategemma-4b-it-gguf).
+The model is subject to the [Gemma Terms of Use](https://ai.google.dev/gemma/terms).
 
 English is currently the only translation target.
 
