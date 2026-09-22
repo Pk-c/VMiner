@@ -185,7 +185,7 @@ public sealed class VocabularyStore
     {
         if (!IsConfigured)
             throw new InvalidOperationException(
-                "Connect Google Drive before adding vocabulary.");
+                "Sign in to your VMiner account before adding vocabulary.");
     }
 
     private static VocabularyEntry CloneEntry(VocabularyEntry entry) => new()

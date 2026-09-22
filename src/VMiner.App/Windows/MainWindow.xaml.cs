@@ -15,7 +15,8 @@ public partial class MainWindow : Window
     private readonly ConfigService _configService = new();
     private readonly AppConfig _config;
     private readonly AnalysisService _analysis;
-    private readonly GoogleDriveVocabularyBackend _googleDrive;
+    private readonly SupabaseAuthService _supabaseAuth;
+    private readonly SupabaseVocabularyBackend _supabaseVocabulary;
     private readonly VocabularyStore _vocabularyStore;
     private readonly GlobalCaptureService _capture;
     private readonly ResultWindow _resultWindow;
@@ -44,8 +45,9 @@ public partial class MainWindow : Window
         if (!string.IsNullOrWhiteSpace(translationModelOverride))
             _config.TranslationModel = translationModelOverride;
         _analysis = new AnalysisService(_config);
-        _googleDrive = new GoogleDriveVocabularyBackend();
-        _vocabularyStore = new VocabularyStore(_googleDrive);
+        _supabaseAuth = new SupabaseAuthService();
+        _supabaseVocabulary = new SupabaseVocabularyBackend(_supabaseAuth);
+        _vocabularyStore = new VocabularyStore(_supabaseVocabulary);
         _resultWindow = new ResultWindow(
             _config, _analysis.Translation, _vocabularyStore);
         _resultWindow.VocabularyChanged += async (_, _) =>
@@ -99,7 +101,7 @@ public partial class MainWindow : Window
         }
 
         var modelInitialization = InitializeTranslationModelAsync();
-        await RestoreGoogleDriveAsync();
+        await RestoreSupabaseSessionAsync();
         await modelInitialization;
     }
 
@@ -208,32 +210,65 @@ public partial class MainWindow : Window
         StatusText.Text = "Settings saved.";
     }
 
-    private async void GoogleDriveClicked(object sender, RoutedEventArgs e)
+    private async void AccountClicked(object sender, RoutedEventArgs e)
     {
-        if (_googleDrive.IsConnected)
-            await DisconnectGoogleDriveAsync();
+        if (_supabaseAuth.IsAuthenticated)
+            await SignOutAsync();
         else
-            await ConnectGoogleDriveAsync();
+            await ShowAccountWindowAsync();
     }
 
-    private async Task RestoreGoogleDriveAsync()
+    private async Task RestoreSupabaseSessionAsync()
     {
         UpdateVocabularyStatus();
-        if (!_googleDrive.OAuthConfigured || !_googleDrive.HasStoredCredential)
+        if (!_supabaseAuth.IsConfigured || !_supabaseAuth.HasStoredSession)
             return;
 
-        await ConnectGoogleDriveAsync();
-    }
-
-    private async Task ConnectGoogleDriveAsync()
-    {
-        GoogleDriveButton.IsEnabled = false;
-        GoogleDriveButton.Content = "Connecting…";
-        VocabularyStatusText.Text = "Connecting to Google Drive…";
+        AccountButton.IsEnabled = false;
+        AccountButton.Content = "Signing in…";
+        VocabularyStatusText.Text = "Restoring your VMiner account…";
         try
         {
-            await _googleDrive.ConnectAsync(_lifetimeCancellation.Token);
-            var imported = await _googleDrive.ImportLocalDatabaseIfEmptyAsync(
+            if (await _supabaseAuth.TryRestoreSessionAsync(_lifetimeCancellation.Token))
+                await FinishSignInAsync();
+            else
+                StatusText.Text = "Your previous session expired. Sign in again to sync vocabulary.";
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception)
+        {
+            StatusText.Text = $"Automatic sign-in failed: {exception.Message}";
+        }
+        finally
+        {
+            UpdateVocabularyStatus();
+        }
+    }
+
+    private async Task ShowAccountWindowAsync()
+    {
+        if (!_supabaseAuth.IsConfigured)
+            return;
+
+        var dialog = new AccountWindow(_supabaseAuth) { Owner = this };
+        if (dialog.ShowDialog() != true)
+        {
+            UpdateVocabularyStatus();
+            return;
+        }
+
+        await FinishSignInAsync();
+    }
+
+    private async Task FinishSignInAsync()
+    {
+        AccountButton.IsEnabled = false;
+        VocabularyStatusText.Text = "Loading your cloud collection…";
+        try
+        {
+            var imported = await _supabaseVocabulary.ImportLocalDatabaseIfEmptyAsync(
                 _config.LegacyVocabularyDatabasePath,
                 _lifetimeCancellation.Token);
             await _vocabularyStore.InitializeAsync(_lifetimeCancellation.Token);
@@ -241,8 +276,8 @@ public partial class MainWindow : Window
             _configService.Save(_config);
             UpdateVocabularyStatus();
             StatusText.Text = imported
-                ? "Connected to Google Drive — the previous local collection was imported."
-                : "Connected to Google Drive — vocabulary sync is active.";
+                ? "Signed in — the previous local collection was imported."
+                : "Signed in — your vocabulary collection is synchronized.";
             if (MainTabs.SelectedItem == CollectionTab)
                 await RefreshCollectionAsync();
         }
@@ -251,7 +286,7 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
-            VocabularyStatusText.Text = "Google Drive connection failed";
+            VocabularyStatusText.Text = "The cloud collection could not be loaded";
             MessageBox.Show(this, exception.Message, "VMiner", MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }
@@ -261,23 +296,23 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task DisconnectGoogleDriveAsync()
+    private async Task SignOutAsync()
     {
         var confirmation = MessageBox.Show(this,
-            "Disconnect Google Drive from VMiner on this computer? Your vocabulary collection will remain safely stored in Google Drive.",
-            "Disconnect Google Drive", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            "Sign out of VMiner on this computer? Your vocabulary collection will remain safely stored in your account.",
+            "Sign out", MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (confirmation != MessageBoxResult.Yes)
             return;
 
-        GoogleDriveButton.IsEnabled = false;
-        GoogleDriveButton.Content = "Disconnecting…";
+        AccountButton.IsEnabled = false;
+        AccountButton.Content = "Signing out…";
         try
         {
-            await _googleDrive.DisconnectAsync(_lifetimeCancellation.Token);
+            await _supabaseAuth.SignOutAsync(_lifetimeCancellation.Token);
             _collectionEntries = [];
             CollectionList.ItemsSource = null;
-            CollectionStatusText.Text = "Connect Google Drive in Capture & model.";
-            StatusText.Text = "Google Drive disconnected. Your remote collection was not deleted.";
+            CollectionStatusText.Text = "Sign in from Capture & model to access your collection.";
+            StatusText.Text = "Signed out. Your cloud collection was not deleted.";
         }
         catch (OperationCanceledException)
         {
@@ -295,32 +330,29 @@ public partial class MainWindow : Window
 
     private void UpdateVocabularyStatus()
     {
-        if (!_googleDrive.OAuthConfigured)
+        if (!_supabaseAuth.IsConfigured)
         {
-            VocabularyStatusText.Text = "Google OAuth setup is missing";
+            VocabularyStatusText.Text = "Supabase setup is missing";
             VocabularyStatusText.ToolTip =
-                $"Place google-oauth-client.json next to VMiner.exe:\n{_googleDrive.ClientSecretsPath}";
-            GoogleDriveButton.Content = "Setup required";
-            GoogleDriveButton.IsEnabled = false;
+                $"Place supabase-config.json next to VMiner.exe:\n{SupabaseAuthService.ConfigurationPath}";
+            AccountButton.Content = "Setup required";
+            AccountButton.IsEnabled = false;
             return;
         }
 
-        VocabularyStatusText.ToolTip =
-            "VMiner uses its private app data folder in your Google Drive.";
-        GoogleDriveButton.IsEnabled = true;
-        if (_googleDrive.IsConnected)
+        VocabularyStatusText.ToolTip = "Your vocabulary is private to your VMiner account.";
+        AccountButton.IsEnabled = true;
+        if (_supabaseAuth.IsAuthenticated)
         {
-            VocabularyStatusText.Text = "Connected • private VMiner storage on Google Drive";
-            GoogleDriveButton.Content = "Disconnect";
+            VocabularyStatusText.Text = string.IsNullOrWhiteSpace(_supabaseAuth.Email)
+                ? "Signed in • collection synchronized"
+                : $"Signed in as {_supabaseAuth.Email}";
+            AccountButton.Content = "Log out";
         }
         else
         {
-            VocabularyStatusText.Text = _googleDrive.HasStoredCredential
-                ? "Google Drive session available — reconnect to sync"
-                : "Not connected — sign in to sync your vocabulary";
-            GoogleDriveButton.Content = _googleDrive.HasStoredCredential
-                ? "Reconnect"
-                : "Connect Google Drive";
+            VocabularyStatusText.Text = "Not signed in — connect or create an account";
+            AccountButton.Content = "Sign in";
         }
     }
 
@@ -342,7 +374,7 @@ public partial class MainWindow : Window
         {
             _collectionEntries = [];
             CollectionList.ItemsSource = null;
-            CollectionStatusText.Text = "Connect Google Drive in Capture & model.";
+            CollectionStatusText.Text = "Sign in from Capture & model to access your collection.";
             return;
         }
 
@@ -626,7 +658,8 @@ public partial class MainWindow : Window
         _lifetimeCancellation.Cancel();
         _capture.Dispose();
         _analysis.Dispose();
-        _googleDrive.Dispose();
+        _supabaseVocabulary.Dispose();
+        _supabaseAuth.Dispose();
         _lifetimeCancellation.Dispose();
         _resultWindow.ClosePermanently();
         Application.Current.Shutdown();

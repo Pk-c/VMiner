@@ -6,8 +6,7 @@ click is required.
 
 Version 2 is a native **C# / .NET 10 / WPF** application distributed as a portable folder.
 Screen capture, OCR, furigana, Japanese-to-English translation, and vocabulary mining all
-run locally. The vocabulary collection is synchronized privately through Google Drive when
-the user connects their account.
+run locally. Vocabulary collections are synchronized through private Supabase accounts.
 
 ## Usage
 
@@ -45,39 +44,43 @@ English is currently the only translation target.
 
 ## Vocabulary collection
 
-Use **Connect Google Drive** on the main screen to authorize VMiner in your browser. The
-database is stored in Google Drive's private `appDataFolder`, which is hidden from the normal
-Drive interface and accessible only to VMiner. The application requests the narrow
-`drive.appdata` permission rather than access to the rest of the user's files.
+Use **Sign in** on the main screen to log in or create a VMiner account with an email address
+and password. VMiner restores the encrypted session automatically on future launches and
+loads the account's collection from Supabase. **Log out** removes the local session without
+deleting the cloud collection.
 
 Each entry contains a Japanese dictionary form, its reading, an English definition, and any
 number of Japanese sentence / English translation pairs. Existing words are merged with new
 examples, while identical sentence pairs are not duplicated. VMiner downloads and updates
-the database directly in memory; it does not keep a local database copy. The OAuth refresh
-token is the only Google data stored locally and is encrypted for the current Windows user.
+the database directly in memory; it does not keep a local database copy. The Supabase session
+is the only account data stored locally and is encrypted for the current Windows user.
 
 When upgrading from a version that used a local JSON database, VMiner imports that collection
-once if the Google Drive collection is empty. The original local file is left untouched as a
+once if the Supabase collection is empty. The original local file is left untouched as a
 backup.
 
 The **Collection** tab can search every field, edit words and their examples, or remove a
 complete entry. Double-clicking an entry also opens the editor.
 
-## Google OAuth setup
+## Supabase setup
 
-The distributed application needs a Google OAuth client owned by the VMiner project:
+The distributed application needs one Supabase project shared by every VMiner account:
 
-1. Create or select a project in Google Cloud Console and enable the Google Drive API.
-2. Configure its OAuth consent screen.
-3. Create an OAuth client ID with **Desktop app** as the application type.
-4. Download the client JSON, rename it to `google-oauth-client.json`, and place it next to
-   `VMiner.exe`.
+1. Create a Supabase project.
+2. Open the project's SQL Editor and run `supabase-setup.sql` once. It creates the JSONB
+   vocabulary table, enables Row Level Security, and restricts each row to its authenticated
+   owner.
+3. Copy the project URL and **publishable** key from the project's Connect dialog.
+4. Copy `supabase-config.example.json` to `supabase-config.json`, replace its placeholders,
+   and place it next to `VMiner.exe`.
 
-The real client file is intentionally excluded from Git. Use
-`google-oauth-client.example.json` as a placement and format reference. If the client is not
-present, VMiner clearly reports that Google OAuth setup is missing and keeps collection
-features disabled. While the OAuth consent screen is in testing mode, add intended users as
-test users in Google Cloud Console.
+Never put a Supabase secret or `service_role` key in the desktop application. The publishable
+key is specifically designed for distributed clients; database access remains protected by
+the included Row Level Security policies. The configured file is excluded from Git. If it is
+missing, VMiner reports that Supabase setup is required and keeps account features disabled.
+
+Email/password authentication is enabled by default on hosted Supabase projects. By default,
+new users receive a confirmation email before they can sign in.
 
 ## Build
 
@@ -105,8 +108,8 @@ while preserving the model already stored in `models\`. The resulting applicatio
 self-contained, so the target machine does not need a separate .NET installation.
 
 To distribute VMiner, copy `VMiner.exe` together with the `IpaDic`, `models`, and `runtimes`
-folders and your `google-oauth-client.json` file. The `src` folder and build script are only
-required for development.
+folders and your `supabase-config.json` file. The `src` folder, SQL setup file, and build
+script are only required for development.
 
 ## Architecture
 
@@ -118,8 +121,10 @@ required for development.
 | Furigana | Kawazu / MeCab |
 | Segmentation | MeCab IPA with dictionary forms and readings |
 | Translation | TranslateGemma GGUF through LLamaSharp |
-| Collection | Google Drive `appDataFolder` through OAuth 2.0 |
+| Accounts | Supabase Auth with email and password |
+| Collection | Supabase Postgres JSONB protected by Row Level Security |
 | Configuration | `config.json` next to the executable |
 
 The main project is located in `src\VMiner.App`. Captures and analysis stay in memory; no
-temporary screenshots or vocabulary database copies are written to disk.
+temporary screenshots or vocabulary database copies are written to disk. Only the encrypted
+Supabase refresh session is retained in the current Windows user's local application data.

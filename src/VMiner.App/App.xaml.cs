@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using VMiner.Models;
 using VMiner.Services;
 using VMiner.Windows;
@@ -57,6 +58,9 @@ public partial class App : Application
                 if (await vocabulary.FindAsync("天気", "てんき") is not null)
                     throw new InvalidOperationException("Vocabulary database delete test failed.");
                 report += " | database CRUD OK";
+
+                await TestSupabaseClientAsync();
+                report += " | Supabase session + database client OK";
             }
             catch (Exception exception)
             {
@@ -83,8 +87,24 @@ public partial class App : Application
                 if (miningAnimation.FrameCount < 2 || !miningAnimation.IsPlaying)
                     throw new InvalidOperationException(
                         "The mining animation was not loaded or did not start playing.");
+
+                using var testAuth = new SupabaseAuthService();
+                var accountWindow = new AccountWindow(testAuth) { Owner = testWindow };
+                accountWindow.Show();
+                try
+                {
+                    accountWindow.UpdateLayout();
+                    if (!accountWindow.IsVisible)
+                        throw new InvalidOperationException(
+                            "The account sign-in window did not open.");
+                }
+                finally
+                {
+                    accountWindow.Close();
+                }
                 report = $"Collection UI OK ({itemCount} visible entries) | " +
-                         $"mining GIF OK ({miningAnimation.FrameCount} frames)";
+                         $"mining GIF OK ({miningAnimation.FrameCount} frames) | " +
+                         "account UI OK";
             }
             catch (Exception exception)
             {
@@ -225,5 +245,110 @@ public partial class App : Application
             }
             return Task.FromResult(response);
         }
+    }
+
+    private static async Task TestSupabaseClientAsync()
+    {
+        var handler = new SupabaseTestHandler();
+        using var client = new HttpClient(handler);
+        var sessionStore = new MemorySupabaseSessionStore();
+        var options = new SupabaseOptions
+        {
+            Url = "https://vminer-test.supabase.co",
+            PublishableKey = "sb_publishable_test",
+        };
+
+        using (var auth = new SupabaseAuthService(options, client, sessionStore))
+        using (var backend = new SupabaseVocabularyBackend(auth, client))
+        {
+            await auth.SignInAsync("miner@example.com", "test-password");
+            var cloudStore = new VocabularyStore(backend);
+            await cloudStore.AddOrUpdateAsync(
+                "鉱山", "こうざん", "mine",
+                "鉱山で働く。", "Work in a mine.");
+            var entry = await cloudStore.FindAsync("鉱山", "こうざん");
+            if (entry?.Definition != "mine")
+                throw new InvalidOperationException(
+                    "Supabase vocabulary round-trip test failed.");
+        }
+
+        using (var restoredAuth = new SupabaseAuthService(options, client, sessionStore))
+        {
+            if (!await restoredAuth.TryRestoreSessionAsync() ||
+                !string.Equals(restoredAuth.Email, "miner@example.com",
+                    StringComparison.Ordinal))
+                throw new InvalidOperationException("Supabase session restore test failed.");
+            await restoredAuth.SignOutAsync();
+        }
+
+        if (sessionStore.HasSession || !handler.RefreshRequested || !handler.LogoutRequested)
+            throw new InvalidOperationException("Supabase session lifecycle test failed.");
+    }
+
+    private sealed class SupabaseTestHandler : HttpMessageHandler
+    {
+        private string? _database;
+
+        public bool RefreshRequested { get; private set; }
+        public bool LogoutRequested { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var path = request.RequestUri?.PathAndQuery ?? "";
+            if (path == "/auth/v1/token?grant_type=password")
+                return JsonResponse(CreateSessionJson("access-1", "refresh-1"));
+            if (path == "/auth/v1/token?grant_type=refresh_token")
+            {
+                RefreshRequested = true;
+                return JsonResponse(CreateSessionJson("access-2", "refresh-2"));
+            }
+            if (path == "/auth/v1/logout")
+            {
+                LogoutRequested = true;
+                return new HttpResponseMessage(HttpStatusCode.NoContent);
+            }
+            if (request.Method == HttpMethod.Get &&
+                path.StartsWith("/rest/v1/vocabulary_databases?", StringComparison.Ordinal))
+            {
+                return JsonResponse(_database is null
+                    ? "[]"
+                    : $"[{{\"data\":{_database}}}]");
+            }
+            if (request.Method == HttpMethod.Post &&
+                path.StartsWith("/rest/v1/vocabulary_databases?", StringComparison.Ordinal))
+            {
+                var json = await request.Content!.ReadAsStringAsync(cancellationToken);
+                using var document = JsonDocument.Parse(json);
+                _database = document.RootElement.GetProperty("data").GetRawText();
+                return new HttpResponseMessage(HttpStatusCode.Created);
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.NotFound)
+            {
+                Content = new StringContent("{\"message\":\"Unexpected test request\"}",
+                    Encoding.UTF8, "application/json"),
+            };
+        }
+
+        private static HttpResponseMessage JsonResponse(string json) => new(HttpStatusCode.OK)
+        {
+            Content = new StringContent(json, Encoding.UTF8, "application/json"),
+        };
+
+        private static string CreateSessionJson(string accessToken, string refreshToken) =>
+            $$"""
+              {
+                "access_token": "{{accessToken}}",
+                "refresh_token": "{{refreshToken}}",
+                "expires_in": 3600,
+                "user": {
+                  "id": "11111111-1111-1111-1111-111111111111",
+                  "email": "miner@example.com"
+                }
+              }
+              """;
     }
 }

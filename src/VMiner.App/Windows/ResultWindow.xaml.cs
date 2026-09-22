@@ -138,7 +138,7 @@ public partial class ResultWindow : Window
         if (!_vocabularyStore.IsConfigured)
         {
             MessageBox.Show(this,
-                "Connect Google Drive from the main VMiner window first.",
+                "Sign in to your VMiner account from the main window first.",
                 "VMiner", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }

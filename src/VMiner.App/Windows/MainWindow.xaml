@@ -235,14 +235,14 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <StackPanel VerticalAlignment="Center">
-                                    <TextBlock Text="Google Drive vocabulary" FontWeight="SemiBold" />
+                                    <TextBlock Text="VMiner account" FontWeight="SemiBold" />
                                     <TextBlock x:Name="VocabularyStatusText" Margin="0,2,12,0"
                                                FontSize="12" Foreground="{StaticResource MutedBrush}"
                                                TextTrimming="CharacterEllipsis" />
                                 </StackPanel>
-                                <Button x:Name="GoogleDriveButton" Grid.Column="1"
-                                        Content="Connect Google Drive"
-                                        Click="GoogleDriveClicked" />
+                                <Button x:Name="AccountButton" Grid.Column="1"
+                                        Content="Sign in"
+                                        Click="AccountClicked" />
                             </Grid>
                         </Border>
                     </Grid>

@@ -15,7 +15,7 @@ artifacts/
 *.onnx
 *.safetensors
 config.json
-google-oauth-client.json
+supabase-config.json
 *self-test*.txt
 translation-test.txt
 TestResults/
