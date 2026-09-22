@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace VMiner.Models;
 
 public sealed class AppConfig
@@ -8,5 +10,7 @@ public sealed class AppConfig
     public bool AlwaysOnTop { get; set; } = true;
     public bool StealFocus { get; set; }
     public string TranslationModel { get; set; } = @"models\translategemma-4b-it-Q4_K_M.gguf";
-    public string VocabularyDatabasePath { get; set; } = "";
+    [JsonPropertyName("VocabularyDatabasePath")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? LegacyVocabularyDatabasePath { get; set; }
 }

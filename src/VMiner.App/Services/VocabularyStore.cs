@@ -1,49 +1,28 @@
-using System.IO;
-using System.Text.Json;
 using VMiner.Models;
 
 namespace VMiner.Services;
 
 public sealed class VocabularyStore
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        PropertyNameCaseInsensitive = true,
-    };
-
+    private readonly IVocabularyDatabaseBackend _backend;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
-    public VocabularyStore(string databasePath)
+    internal VocabularyStore(IVocabularyDatabaseBackend backend)
     {
-        DatabasePath = databasePath;
+        _backend = backend;
     }
 
-    public string DatabasePath { get; private set; }
-    public bool IsConfigured => !string.IsNullOrWhiteSpace(DatabasePath);
+    public bool IsConfigured => _backend.IsConnected;
 
-    public void SetDatabasePath(string path) => DatabasePath = string.IsNullOrWhiteSpace(path)
-        ? ""
-        : Path.GetFullPath(path);
-
-    public async Task InitializeAsync()
+    public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         if (!IsConfigured)
             return;
 
-        await _gate.WaitAsync();
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            if (File.Exists(DatabasePath))
-            {
-                await LoadUnsafeAsync();
-                return;
-            }
-
-            var directory = Path.GetDirectoryName(DatabasePath);
-            if (!string.IsNullOrEmpty(directory))
-                Directory.CreateDirectory(directory);
-            await SaveUnsafeAsync(new VocabularyDatabase());
+            await _backend.LoadAsync(cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -51,18 +30,22 @@ public sealed class VocabularyStore
         }
     }
 
-    public async Task<VocabularyEntry?> FindAsync(string word, string reading)
+    public async Task<VocabularyEntry?> FindAsync(
+        string word,
+        string reading,
+        CancellationToken cancellationToken = default)
     {
         if (!IsConfigured)
             return null;
 
-        await _gate.WaitAsync();
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var database = await LoadUnsafeAsync();
-            return database.Entries.FirstOrDefault(entry =>
-                string.Equals(entry.Word, word, StringComparison.Ordinal) &&
-                string.Equals(entry.Reading, reading, StringComparison.Ordinal));
+            var database = await _backend.LoadAsync(cancellationToken).ConfigureAwait(false);
+            var entry = database.Entries.FirstOrDefault(item =>
+                string.Equals(item.Word, word, StringComparison.Ordinal) &&
+                string.Equals(item.Reading, reading, StringComparison.Ordinal));
+            return entry is null ? null : CloneEntry(entry);
         }
         finally
         {
@@ -70,15 +53,16 @@ public sealed class VocabularyStore
         }
     }
 
-    public async Task<IReadOnlyList<VocabularyEntry>> GetAllAsync()
+    public async Task<IReadOnlyList<VocabularyEntry>> GetAllAsync(
+        CancellationToken cancellationToken = default)
     {
         if (!IsConfigured)
             return [];
 
-        await _gate.WaitAsync();
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var database = await LoadUnsafeAsync();
+            var database = await _backend.LoadAsync(cancellationToken).ConfigureAwait(false);
             return database.Entries
                 .OrderBy(entry => entry.Word, StringComparer.Ordinal)
                 .Select(CloneEntry)
@@ -93,15 +77,14 @@ public sealed class VocabularyStore
     public async Task UpdateAsync(
         string originalWord,
         string originalReading,
-        VocabularyEntry updatedEntry)
+        VocabularyEntry updatedEntry,
+        CancellationToken cancellationToken = default)
     {
-        if (!IsConfigured)
-            throw new InvalidOperationException("Choose a vocabulary database first.");
-
-        await _gate.WaitAsync();
+        EnsureConnected();
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var database = await LoadUnsafeAsync();
+            var database = await _backend.LoadAsync(cancellationToken).ConfigureAwait(false);
             var entry = database.Entries.FirstOrDefault(item =>
                 string.Equals(item.Word, originalWord, StringComparison.Ordinal) &&
                 string.Equals(item.Reading, originalReading, StringComparison.Ordinal))
@@ -126,7 +109,7 @@ public sealed class VocabularyStore
                 })
                 .DistinctBy(example => (example.Japanese, example.English))
                 .ToList();
-            await SaveUnsafeAsync(database);
+            await _backend.SaveAsync(database, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -134,19 +117,22 @@ public sealed class VocabularyStore
         }
     }
 
-    public async Task DeleteAsync(string word, string reading)
+    public async Task DeleteAsync(
+        string word,
+        string reading,
+        CancellationToken cancellationToken = default)
     {
         if (!IsConfigured)
             return;
 
-        await _gate.WaitAsync();
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var database = await LoadUnsafeAsync();
+            var database = await _backend.LoadAsync(cancellationToken).ConfigureAwait(false);
             database.Entries.RemoveAll(entry =>
                 string.Equals(entry.Word, word, StringComparison.Ordinal) &&
                 string.Equals(entry.Reading, reading, StringComparison.Ordinal));
-            await SaveUnsafeAsync(database);
+            await _backend.SaveAsync(database, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -159,15 +145,14 @@ public sealed class VocabularyStore
         string reading,
         string definition,
         string japaneseSentence,
-        string englishSentence)
+        string englishSentence,
+        CancellationToken cancellationToken = default)
     {
-        if (!IsConfigured)
-            throw new InvalidOperationException("Choose a vocabulary database before adding words.");
-
-        await _gate.WaitAsync();
+        EnsureConnected();
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var database = await LoadUnsafeAsync();
+            var database = await _backend.LoadAsync(cancellationToken).ConfigureAwait(false);
             var entry = database.Entries.FirstOrDefault(item =>
                 string.Equals(item.Word, word, StringComparison.Ordinal) &&
                 string.Equals(item.Reading, reading, StringComparison.Ordinal));
@@ -188,7 +173,7 @@ public sealed class VocabularyStore
                 });
             }
 
-            await SaveUnsafeAsync(database);
+            await _backend.SaveAsync(database, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -196,25 +181,11 @@ public sealed class VocabularyStore
         }
     }
 
-    private async Task<VocabularyDatabase> LoadUnsafeAsync()
+    private void EnsureConnected()
     {
-        if (!File.Exists(DatabasePath))
-            return new VocabularyDatabase();
-
-        await using var stream = File.OpenRead(DatabasePath);
-        return await JsonSerializer.DeserializeAsync<VocabularyDatabase>(stream, JsonOptions)
-               ?? new VocabularyDatabase();
-    }
-
-    private async Task SaveUnsafeAsync(VocabularyDatabase database)
-    {
-        var temporary = DatabasePath + ".tmp";
-        await using (var stream = new FileStream(
-                         temporary, FileMode.Create, FileAccess.Write, FileShare.None))
-        {
-            await JsonSerializer.SerializeAsync(stream, database, JsonOptions);
-        }
-        File.Move(temporary, DatabasePath, true);
+        if (!IsConfigured)
+            throw new InvalidOperationException(
+                "Connect Google Drive before adding vocabulary.");
     }
 
     private static VocabularyEntry CloneEntry(VocabularyEntry entry) => new()

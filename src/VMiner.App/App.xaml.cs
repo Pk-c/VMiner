@@ -23,13 +23,13 @@ public partial class App : Application
         {
             var exitCode = 0;
             string report;
-            var vocabularyTestPath = Path.GetFullPath(reportPath) + ".vocabulary-test.json";
             try
             {
                 using var analysis = new AnalysisService(new AppConfig());
                 report = await analysis.SelfCheckAsync();
 
-                var vocabulary = new VocabularyStore(vocabularyTestPath);
+                var vocabulary = new VocabularyStore(
+                    new MemoryVocabularyDatabaseBackend());
                 await vocabulary.InitializeAsync();
                 await vocabulary.AddOrUpdateAsync(
                     "天気", "てんき", "weather",
@@ -63,14 +63,6 @@ public partial class App : Application
                 exitCode = 1;
                 report = exception.ToString();
             }
-            finally
-            {
-                if (File.Exists(vocabularyTestPath))
-                    File.Delete(vocabularyTestPath);
-                if (File.Exists(vocabularyTestPath + ".tmp"))
-                    File.Delete(vocabularyTestPath + ".tmp");
-            }
-
             File.WriteAllText(Path.GetFullPath(reportPath), report);
             Shutdown(exitCode);
             return;

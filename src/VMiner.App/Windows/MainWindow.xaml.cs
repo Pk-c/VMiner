@@ -5,7 +5,6 @@ using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using Microsoft.Win32;
 using VMiner.Models;
 using VMiner.Services;
 
@@ -16,6 +15,7 @@ public partial class MainWindow : Window
     private readonly ConfigService _configService = new();
     private readonly AppConfig _config;
     private readonly AnalysisService _analysis;
+    private readonly GoogleDriveVocabularyBackend _googleDrive;
     private readonly VocabularyStore _vocabularyStore;
     private readonly GlobalCaptureService _capture;
     private readonly ResultWindow _resultWindow;
@@ -44,7 +44,8 @@ public partial class MainWindow : Window
         if (!string.IsNullOrWhiteSpace(translationModelOverride))
             _config.TranslationModel = translationModelOverride;
         _analysis = new AnalysisService(_config);
-        _vocabularyStore = new VocabularyStore(_config.VocabularyDatabasePath);
+        _googleDrive = new GoogleDriveVocabularyBackend();
+        _vocabularyStore = new VocabularyStore(_googleDrive);
         _resultWindow = new ResultWindow(
             _config, _analysis.Translation, _vocabularyStore);
         _resultWindow.VocabularyChanged += async (_, _) =>
@@ -98,7 +99,7 @@ public partial class MainWindow : Window
         }
 
         var modelInitialization = InitializeTranslationModelAsync();
-        await EnsureVocabularyDatabaseAsync(promptIfMissing: true);
+        await RestoreGoogleDriveAsync();
         await modelInitialization;
     }
 
@@ -207,75 +208,120 @@ public partial class MainWindow : Window
         StatusText.Text = "Settings saved.";
     }
 
-    private async void ChooseVocabularyDatabaseClicked(object sender, RoutedEventArgs e) =>
-        await EnsureVocabularyDatabaseAsync(promptIfMissing: true, forcePrompt: true);
-
-    private async Task EnsureVocabularyDatabaseAsync(
-        bool promptIfMissing,
-        bool forcePrompt = false)
+    private async void GoogleDriveClicked(object sender, RoutedEventArgs e)
     {
-        var selectedPath = _config.VocabularyDatabasePath;
-        if (forcePrompt || (promptIfMissing && string.IsNullOrWhiteSpace(selectedPath)))
-        {
-            var dialog = new SaveFileDialog
-            {
-                Title = "Choose your VMiner vocabulary database",
-                Filter = "VMiner vocabulary database (*.json)|*.json|JSON files (*.json)|*.json",
-                DefaultExt = ".json",
-                AddExtension = true,
-                FileName = string.IsNullOrWhiteSpace(selectedPath)
-                    ? "vminer-vocabulary.json"
-                    : Path.GetFileName(selectedPath),
-                OverwritePrompt = false,
-            };
-            if (!string.IsNullOrWhiteSpace(selectedPath))
-                dialog.InitialDirectory = Path.GetDirectoryName(selectedPath);
-            if (dialog.ShowDialog(this) != true)
-            {
-                UpdateVocabularyStatus();
-                return;
-            }
-            selectedPath = dialog.FileName;
-        }
+        if (_googleDrive.IsConnected)
+            await DisconnectGoogleDriveAsync();
+        else
+            await ConnectGoogleDriveAsync();
+    }
 
-        if (string.IsNullOrWhiteSpace(selectedPath))
-        {
-            UpdateVocabularyStatus();
+    private async Task RestoreGoogleDriveAsync()
+    {
+        UpdateVocabularyStatus();
+        if (!_googleDrive.OAuthConfigured || !_googleDrive.HasStoredCredential)
             return;
-        }
 
-        var previousPath = _vocabularyStore.DatabasePath;
+        await ConnectGoogleDriveAsync();
+    }
+
+    private async Task ConnectGoogleDriveAsync()
+    {
+        GoogleDriveButton.IsEnabled = false;
+        GoogleDriveButton.Content = "Connecting…";
+        VocabularyStatusText.Text = "Connecting to Google Drive…";
         try
         {
-            _vocabularyStore.SetDatabasePath(selectedPath);
-            VocabularyStatusText.Text = "Preparing vocabulary database…";
-            await _vocabularyStore.InitializeAsync();
-            _config.VocabularyDatabasePath = _vocabularyStore.DatabasePath;
+            await _googleDrive.ConnectAsync(_lifetimeCancellation.Token);
+            var imported = await _googleDrive.ImportLocalDatabaseIfEmptyAsync(
+                _config.LegacyVocabularyDatabasePath,
+                _lifetimeCancellation.Token);
+            await _vocabularyStore.InitializeAsync(_lifetimeCancellation.Token);
+            _config.LegacyVocabularyDatabasePath = null;
             _configService.Save(_config);
             UpdateVocabularyStatus();
+            StatusText.Text = imported
+                ? "Connected to Google Drive — the previous local collection was imported."
+                : "Connected to Google Drive — vocabulary sync is active.";
             if (MainTabs.SelectedItem == CollectionTab)
                 await RefreshCollectionAsync();
         }
+        catch (OperationCanceledException)
+        {
+        }
         catch (Exception exception)
         {
-            _vocabularyStore.SetDatabasePath(previousPath);
-            VocabularyStatusText.Text = "Vocabulary database could not be opened";
+            VocabularyStatusText.Text = "Google Drive connection failed";
             MessageBox.Show(this, exception.Message, "VMiner", MessageBoxButton.OK,
                 MessageBoxImage.Error);
+        }
+        finally
+        {
+            UpdateVocabularyStatus();
+        }
+    }
+
+    private async Task DisconnectGoogleDriveAsync()
+    {
+        var confirmation = MessageBox.Show(this,
+            "Disconnect Google Drive from VMiner on this computer? Your vocabulary collection will remain safely stored in Google Drive.",
+            "Disconnect Google Drive", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (confirmation != MessageBoxResult.Yes)
+            return;
+
+        GoogleDriveButton.IsEnabled = false;
+        GoogleDriveButton.Content = "Disconnecting…";
+        try
+        {
+            await _googleDrive.DisconnectAsync(_lifetimeCancellation.Token);
+            _collectionEntries = [];
+            CollectionList.ItemsSource = null;
+            CollectionStatusText.Text = "Connect Google Drive in Capture & model.";
+            StatusText.Text = "Google Drive disconnected. Your remote collection was not deleted.";
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception)
+        {
+            MessageBox.Show(this, exception.Message, "VMiner", MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+        finally
+        {
+            UpdateVocabularyStatus();
         }
     }
 
     private void UpdateVocabularyStatus()
     {
-        if (string.IsNullOrWhiteSpace(_config.VocabularyDatabasePath))
+        if (!_googleDrive.OAuthConfigured)
         {
-            VocabularyStatusText.Text = "No database selected";
-            VocabularyStatusText.ToolTip = null;
+            VocabularyStatusText.Text = "Google OAuth setup is missing";
+            VocabularyStatusText.ToolTip =
+                $"Place google-oauth-client.json next to VMiner.exe:\n{_googleDrive.ClientSecretsPath}";
+            GoogleDriveButton.Content = "Setup required";
+            GoogleDriveButton.IsEnabled = false;
             return;
         }
 
-        VocabularyStatusText.Text = _config.VocabularyDatabasePath;
-        VocabularyStatusText.ToolTip = _config.VocabularyDatabasePath;
+        VocabularyStatusText.ToolTip =
+            "VMiner uses its private app data folder in your Google Drive.";
+        GoogleDriveButton.IsEnabled = true;
+        if (_googleDrive.IsConnected)
+        {
+            VocabularyStatusText.Text = "Connected • private VMiner storage on Google Drive";
+            GoogleDriveButton.Content = "Disconnect";
+        }
+        else
+        {
+            VocabularyStatusText.Text = _googleDrive.HasStoredCredential
+                ? "Google Drive session available — reconnect to sync"
+                : "Not connected — sign in to sync your vocabulary";
+            GoogleDriveButton.Content = _googleDrive.HasStoredCredential
+                ? "Reconnect"
+                : "Connect Google Drive";
+        }
     }
 
     private async void MainTabsChanged(object sender, SelectionChangedEventArgs e)
@@ -296,7 +342,7 @@ public partial class MainWindow : Window
         {
             _collectionEntries = [];
             CollectionList.ItemsSource = null;
-            CollectionStatusText.Text = "Choose a vocabulary database in Capture & model.";
+            CollectionStatusText.Text = "Connect Google Drive in Capture & model.";
             return;
         }
 
@@ -580,6 +626,7 @@ public partial class MainWindow : Window
         _lifetimeCancellation.Cancel();
         _capture.Dispose();
         _analysis.Dispose();
+        _googleDrive.Dispose();
         _lifetimeCancellation.Dispose();
         _resultWindow.ClosePermanently();
         Application.Current.Shutdown();

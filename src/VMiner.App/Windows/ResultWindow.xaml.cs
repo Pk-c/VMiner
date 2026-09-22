@@ -138,7 +138,7 @@ public partial class ResultWindow : Window
         if (!_vocabularyStore.IsConfigured)
         {
             MessageBox.Show(this,
-                "Choose a vocabulary database from the main VMiner window first.",
+                "Connect Google Drive from the main VMiner window first.",
                 "VMiner", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
