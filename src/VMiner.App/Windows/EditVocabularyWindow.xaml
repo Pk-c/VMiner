@@ -1,0 +1,105 @@
+<Window x:Class="VMiner.Windows.EditVocabularyWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Edit vocabulary entry" Width="680" Height="680"
+        MinWidth="580" MinHeight="560"
+        Background="{StaticResource BackgroundBrush}"
+        WindowStartupLocation="CenterOwner" ResizeMode="CanResizeWithGrip">
+    <Grid Margin="22">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="EDIT VOCABULARY ENTRY" FontSize="12" FontWeight="SemiBold"
+                   Foreground="{StaticResource MutedBrush}" />
+
+        <Grid Grid.Row="1" Margin="0,16,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="18" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <Label Content="Word / dictionary form" />
+                <TextBox x:Name="WordBox" FontFamily="Yu Gothic UI" FontSize="18" />
+            </StackPanel>
+            <StackPanel Grid.Column="2">
+                <Label Content="Reading" />
+                <TextBox x:Name="ReadingBox" FontFamily="Yu Gothic UI" FontSize="18" />
+            </StackPanel>
+        </Grid>
+
+        <Label Grid.Row="2" Content="English definition" Margin="0,15,0,5" />
+        <TextBox x:Name="DefinitionBox" Grid.Row="3" MinHeight="68"
+                 TextWrapping="Wrap" AcceptsReturn="True"
+                 VerticalScrollBarVisibility="Auto" />
+
+        <Grid Grid.Row="4" Margin="0,16,0,7">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="SENTENCE EXAMPLES" VerticalAlignment="Center"
+                       FontSize="12" FontWeight="SemiBold"
+                       Foreground="{StaticResource MutedBrush}" />
+            <Button Grid.Column="1" Content="Add example" Click="AddExampleClicked" />
+        </Grid>
+
+        <Border Grid.Row="5" Background="{StaticResource PanelBrush}"
+                BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                CornerRadius="8" Padding="8">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ItemsControl x:Name="ExamplesList">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Margin="0,0,0,8" Padding="10" CornerRadius="7"
+                                    Background="{StaticResource PanelRaisedBrush}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="8" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <TextBox Text="{Binding Japanese, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             MinHeight="54" TextWrapping="Wrap" AcceptsReturn="True"
+                                             FontFamily="Yu Gothic UI" />
+                                    <TextBox Grid.Row="2"
+                                             Text="{Binding English, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             MinHeight="54" TextWrapping="Wrap" AcceptsReturn="True" />
+                                    <Button Grid.Column="1" Grid.RowSpan="3" Content="Remove"
+                                            Tag="{Binding}" Click="RemoveExampleClicked"
+                                            Margin="9,0,0,0" VerticalAlignment="Top"
+                                            Foreground="{StaticResource DangerBrush}" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Border>
+
+        <Grid Grid.Row="6" Margin="0,18,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="StatusText" VerticalAlignment="Center"
+                       Foreground="{StaticResource DangerBrush}" TextWrapping="Wrap" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <Button Content="Cancel" Click="CancelClicked" Margin="0,0,9,0" />
+                <Button x:Name="SaveButton" Content="Save changes" Click="SaveClicked"
+                        Style="{StaticResource AccentButtonStyle}" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

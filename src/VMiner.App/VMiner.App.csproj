@@ -1,0 +1,63 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>img\vminer.ico</ApplicationIcon>
+    <AssemblyName>VMiner</AssemblyName>
+    <RootNamespace>VMiner</RootNamespace>
+    <Version>2.0.0</Version>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <!-- Les assemblies .NET sont fusionnées dans VMiner.exe. Les bibliothèques
+         llama.cpp restent dans runtimes/ afin que LLamaSharp puisse les charger. -->
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <PublishTrimmed>false</PublishTrimmed>
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Kawazu" Version="1.1.4" />
+    <PackageReference Include="LLamaSharp" Version="0.27.0" />
+    <PackageReference Include="LLamaSharp.Backend.Vulkan.Windows" Version="0.27.0" />
+  </ItemGroup>
+
+  <!-- Kawazu cherche son dictionnaire MeCab dans IpaDic au runtime. Le package
+       NuGet ne copie pas correctement ces contentFiles pour net10.0. -->
+  <ItemGroup>
+    <Content Include="$(NuGetPackageRoot)kawazu\1.1.4\content\*">
+      <Link>IpaDic\%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="models\README.txt" CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="img\icon.png;img\mining.gif" />
+    <Resource Include="img\icon.png;img\mining.gif" />
+  </ItemGroup>
+
+  <!-- Les DLL natives WPF sont intégrées dans l'exécutable. LLamaSharp détecte
+       ses backends uniquement lorsqu'ils restent visibles sous runtimes/. -->
+  <ItemGroup>
+    <LlamaNativeLibrary Include="$(NuGetPackageRoot)llamasharp.backend.cpu\0.27.0\LLamaSharpRuntimes\win-x64\native\**\*;
+                                 $(NuGetPackageRoot)llamasharp.backend.vulkan.windows\0.27.0\LLamaSharpRuntimes\win-x64\native\**\*" />
+  </ItemGroup>
+
+  <Target Name="CopyLlamaNativeLibraries" AfterTargets="Publish">
+    <Copy SourceFiles="@(LlamaNativeLibrary)"
+          DestinationFiles="@(LlamaNativeLibrary->'$(PublishDir)runtimes\win-x64\native\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+</Project>

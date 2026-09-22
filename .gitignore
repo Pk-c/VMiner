@@ -1,0 +1,25 @@
+.dotnet-cli/
+artifacts/
+/VMiner.exe
+/IpaDic/
+/models/
+/runtimes/
+**/bin/
+**/obj/
+.vs/
+.idea/
+*.user
+*.suo
+*.userprefs
+*.gguf
+*.onnx
+*.safetensors
+config.json
+*self-test*.txt
+translation-test.txt
+TestResults/
+*.log
+
+# Local vocabulary collections and temporary writes
+*.vocabulary-test.json
+*.json.tmp

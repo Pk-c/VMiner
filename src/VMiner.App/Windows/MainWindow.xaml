@@ -1,0 +1,313 @@
+<Window x:Class="VMiner.Windows.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="VMiner" Width="900" Height="680" MinWidth="740" MinHeight="580"
+        Background="{StaticResource BackgroundBrush}" ShowInTaskbar="True"
+        WindowStartupLocation="CenterScreen">
+    <Window.Resources>
+        <Style TargetType="{x:Type TabControl}">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type TabControl}">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <TabPanel Grid.Row="0" IsItemsHost="True" Margin="24,0,24,10"
+                                      Background="Transparent" />
+                            <ContentPresenter Grid.Row="1"
+                                              Content="{TemplateBinding SelectedContent}"
+                                              ContentTemplate="{TemplateBinding SelectedContentTemplate}"
+                                              ContentStringFormat="{TemplateBinding SelectedContentStringFormat}" />
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="{x:Type TabItem}">
+            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Padding" Value="15,9" />
+            <Setter Property="Margin" Value="0,0,5,0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type TabItem}">
+                        <Border x:Name="TabBorder" Padding="{TemplateBinding Padding}"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="Transparent" BorderThickness="1"
+                                CornerRadius="7">
+                            <ContentPresenter ContentSource="Header" HorizontalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="TabBorder" Property="Background"
+                                        Value="{StaticResource PanelRaisedBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="TabBorder" Property="Background"
+                                        Value="{StaticResource AccentTintBrush}" />
+                                <Setter TargetName="TabBorder" Property="BorderBrush"
+                                        Value="{StaticResource AccentBorderBrush}" />
+                                <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="{x:Type ListBox}">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+
+        <Style TargetType="{x:Type ListBoxItem}">
+            <Setter Property="Foreground" Value="{StaticResource ForegroundBrush}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="12,10" />
+            <Setter Property="Margin" Value="0,0,0,4" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ListBoxItem}">
+                        <Border x:Name="ItemBorder" Padding="{TemplateBinding Padding}"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="Transparent" BorderThickness="1"
+                                CornerRadius="7">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background"
+                                        Value="{StaticResource SelectionHoverBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background"
+                                        Value="{StaticResource SelectionBrush}" />
+                                <Setter TargetName="ItemBorder" Property="BorderBrush"
+                                        Value="{StaticResource AccentBorderBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid Background="{StaticResource BackgroundBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Margin="24,20,24,12">
+            <StackPanel Orientation="Horizontal">
+                <Image Source="pack://application:,,,/img/icon.png"
+                       Width="44" Height="44" Margin="0,0,12,0"
+                       VerticalAlignment="Center"
+                       RenderOptions.BitmapScalingMode="HighQuality" />
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="VMiner" FontSize="28" FontWeight="SemiBold" />
+                    <TextBlock Text="japanese text mining app by pkc"
+                               Margin="0,1,0,0" FontSize="13"
+                               Foreground="{StaticResource MutedBrush}" />
+                </StackPanel>
+            </StackPanel>
+            <Border Margin="0,16,0,0" Padding="13,10" CornerRadius="8"
+                    Background="{StaticResource AccentTintBrush}"
+                    BorderBrush="{StaticResource AccentBorderBrush}" BorderThickness="1">
+                <TextBlock x:Name="HintText" TextWrapping="Wrap"
+                           Foreground="{StaticResource WarmTextBrush}" />
+            </Border>
+        </StackPanel>
+
+        <TabControl x:Name="MainTabs" Grid.Row="1" SelectionChanged="MainTabsChanged">
+            <TabItem Header="Capture &amp; model">
+                <Border Margin="24,0,24,14" Padding="20" CornerRadius="10"
+                        Background="{StaticResource PanelBrush}"
+                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="180" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="SETTINGS"
+                                   Margin="0,0,0,16" FontSize="12" FontWeight="SemiBold"
+                                   Foreground="{StaticResource MutedBrush}" />
+
+                        <Label Grid.Row="1" Content="Capture key" />
+                        <ComboBox x:Name="HotkeyBox" Grid.Row="1" Grid.Column="1"
+                                  Margin="0,0,0,12" SelectionChanged="HotkeyChanged">
+                            <ComboBoxItem Tag="LeftShift">Left Shift</ComboBoxItem>
+                            <ComboBoxItem Tag="RightShift">Right Shift</ComboBoxItem>
+                            <ComboBoxItem Tag="LeftControl">Left Ctrl</ComboBoxItem>
+                            <ComboBoxItem Tag="RightControl">Right Ctrl</ComboBoxItem>
+                            <ComboBoxItem Tag="LeftAlt">Left Alt</ComboBoxItem>
+                            <ComboBoxItem Tag="RightAlt">Right Alt</ComboBoxItem>
+                        </ComboBox>
+
+                        <Label Grid.Row="2" Content="Text size" />
+                        <TextBox x:Name="FontSizeBox" Grid.Row="2" Grid.Column="1"
+                                 Width="92" HorizontalAlignment="Left" Margin="0,0,0,14" />
+
+                        <CheckBox x:Name="FocusCheck" Grid.Row="3" Grid.Column="1"
+                                  Content="Bring results to the foreground" />
+
+                        <Border Grid.Row="4" Grid.ColumnSpan="2" Margin="0,18,0,0"
+                                Padding="13,11" CornerRadius="8"
+                                Background="{StaticResource InputBrush}"
+                                BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Ellipse x:Name="ModelStatusIndicator" Width="9" Height="9"
+                                         Margin="0,2,11,0" VerticalAlignment="Top"
+                                         Fill="{StaticResource SuccessBrush}" />
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="Local English translation" FontWeight="SemiBold" />
+                                    <TextBlock x:Name="ModelStatusText" Margin="0,2,0,0"
+                                               FontSize="12" Foreground="{StaticResource MutedBrush}" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <Border Grid.Row="5" Grid.ColumnSpan="2" Margin="0,10,0,0"
+                                Padding="13,11" CornerRadius="8"
+                                Background="{StaticResource InputBrush}"
+                                BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="Vocabulary collection" FontWeight="SemiBold" />
+                                    <TextBlock x:Name="VocabularyStatusText" Margin="0,2,12,0"
+                                               FontSize="12" Foreground="{StaticResource MutedBrush}"
+                                               TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                                <Button Grid.Column="1" Content="Choose file…"
+                                        Click="ChooseVocabularyDatabaseClicked" />
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </Border>
+            </TabItem>
+
+            <TabItem x:Name="CollectionTab" Header="Collection">
+                <Grid Margin="24,0,24,14">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Border Padding="12" CornerRadius="9"
+                            Background="{StaticResource PanelBrush}"
+                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="CollectionSearchBox"
+                                     TextChanged="CollectionSearchChanged"
+                                     ToolTip="Search words, readings, definitions, or examples" />
+                            <Button Grid.Column="1" Content="Refresh" Click="RefreshCollectionClicked"
+                                    Margin="10,0,0,0" />
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Row="1" Margin="0,10,0,10" Padding="8" CornerRadius="9"
+                            Background="{StaticResource PanelBrush}"
+                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                        <ListBox x:Name="CollectionList"
+                                 SelectionChanged="CollectionSelectionChanged"
+                                 MouseDoubleClick="CollectionDoubleClicked">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="145" />
+                                            <ColumnDefinition Width="125" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="90" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{Binding Word}" FontSize="20"
+                                                   FontFamily="Yu Gothic UI" FontWeight="SemiBold" />
+                                        <TextBlock Grid.Column="1" Text="{Binding Reading}"
+                                                   VerticalAlignment="Center" FontFamily="Yu Gothic UI"
+                                                   Foreground="{StaticResource ReadingBrush}" />
+                                        <TextBlock Grid.Column="2" Text="{Binding Definition}"
+                                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                                   Margin="8,0" />
+                                        <TextBlock Grid.Column="3" VerticalAlignment="Center"
+                                                   HorizontalAlignment="Right"
+                                                   Foreground="{StaticResource MutedBrush}">
+                                            <Run Text="{Binding Examples.Count, Mode=OneWay}" />
+                                            <Run Text=" examples" />
+                                        </TextBlock>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Border>
+
+                    <Grid Grid.Row="2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="CollectionStatusText" VerticalAlignment="Center"
+                                   Foreground="{StaticResource MutedBrush}" />
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <Button x:Name="EditEntryButton" Content="Edit selected"
+                                    Click="EditEntryClicked" IsEnabled="False" Margin="0,0,9,0" />
+                            <Button x:Name="RemoveEntryButton" Content="Remove selected"
+                                    Click="RemoveEntryClicked" IsEnabled="False"
+                                    Foreground="{StaticResource DangerBrush}" />
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+            </TabItem>
+        </TabControl>
+
+        <Grid Grid.Row="2" Margin="24,0,24,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Orientation="Horizontal">
+                <Button Content="Save settings" Click="SaveClicked"
+                        Style="{StaticResource AccentButtonStyle}" Margin="0,0,9,0" />
+                <Button Content="Minimize" Click="HideClicked" />
+            </StackPanel>
+            <Button Grid.Column="1" Content="Exit" Click="QuitClicked"
+                    Foreground="{StaticResource DangerBrush}" />
+        </Grid>
+
+        <Border Grid.Row="3" Background="{StaticResource StatusBarBrush}" Padding="14,8"
+                BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0">
+            <TextBlock x:Name="StatusText" Text="Starting…"
+                       FontSize="12" Foreground="{StaticResource MutedBrush}" />
+        </Border>
+    </Grid>
+</Window>
