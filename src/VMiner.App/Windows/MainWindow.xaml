@@ -16,8 +16,13 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
-                            <TabPanel Grid.Row="0" IsItemsHost="True" Margin="24,0,24,10"
-                                      Background="Transparent" />
+                            <Border Grid.Row="0" Margin="24,0,24,12" Padding="4"
+                                    HorizontalAlignment="Left"
+                                    Background="{StaticResource PanelBrush}"
+                                    BorderBrush="{StaticResource BorderBrush}"
+                                    BorderThickness="1" CornerRadius="10">
+                                <TabPanel IsItemsHost="True" Background="Transparent" />
+                            </Border>
                             <ContentPresenter Grid.Row="1"
                                               Content="{TemplateBinding SelectedContent}"
                                               ContentTemplate="{TemplateBinding SelectedContentTemplate}"
@@ -31,29 +36,51 @@
         <Style TargetType="{x:Type TabItem}">
             <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Padding" Value="15,9" />
-            <Setter Property="Margin" Value="0,0,5,0" />
+            <Setter Property="MinWidth" Value="142" />
+            <Setter Property="MinHeight" Value="40" />
+            <Setter Property="Padding" Value="18,9" />
+            <Setter Property="Margin" Value="0" />
             <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type TabItem}">
                         <Border x:Name="TabBorder" Padding="{TemplateBinding Padding}"
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="Transparent" BorderThickness="1"
-                                CornerRadius="7">
-                            <ContentPresenter ContentSource="Header" HorizontalAlignment="Center" />
+                                CornerRadius="7" SnapsToDevicePixels="True">
+                            <ContentPresenter ContentSource="Header"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="TabBorder" Property="Background"
-                                        Value="{StaticResource PanelRaisedBrush}" />
+                                        Value="{StaticResource SelectionHoverBrush}" />
+                                <Setter Property="Foreground"
+                                        Value="{StaticResource ForegroundBrush}" />
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
                                 <Setter TargetName="TabBorder" Property="Background"
                                         Value="{StaticResource AccentTintBrush}" />
                                 <Setter TargetName="TabBorder" Property="BorderBrush"
                                         Value="{StaticResource AccentBorderBrush}" />
-                                <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+                                <Setter Property="Foreground" Value="{StaticResource WarmTextBrush}" />
+                            </Trigger>
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsSelected" Value="True" />
+                                    <Condition Property="IsMouseOver" Value="True" />
+                                </MultiTrigger.Conditions>
+                                <Setter TargetName="TabBorder" Property="Background"
+                                        Value="{StaticResource SelectionBrush}" />
+                            </MultiTrigger>
+                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                <Setter TargetName="TabBorder" Property="BorderBrush"
+                                        Value="{StaticResource AccentBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
