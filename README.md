@@ -1,4 +1,4 @@
-# VMiner 2
+# VMiner
 
 VMiner lit le japonais directement à l'écran sous Windows : maintiens la touche de capture,
 déplace la souris jusqu'à l'autre coin de la zone, puis relâche la touche. Aucun clic n'est
