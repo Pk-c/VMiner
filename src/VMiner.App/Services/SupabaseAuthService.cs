@@ -13,8 +13,35 @@ internal sealed class SupabaseOptions
 
     public bool IsValid => Uri.TryCreate(Url, UriKind.Absolute, out var uri) &&
                            uri.Scheme == Uri.UriSchemeHttps &&
-                           !string.IsNullOrWhiteSpace(PublishableKey) &&
-                           !PublishableKey.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase);
+                           IsSafePublicKey(PublishableKey);
+
+    private static bool IsSafePublicKey(string key)
+    {
+        if (string.IsNullOrWhiteSpace(key) ||
+            key.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase) ||
+            key.StartsWith("sb_secret_", StringComparison.Ordinal))
+            return false;
+        if (key.StartsWith("sb_publishable_", StringComparison.Ordinal))
+            return true;
+
+        // Legacy Supabase anon keys are JWTs. Accept only an explicit anon role,
+        // never a service_role token that would bypass Row Level Security.
+        var segments = key.Split('.');
+        if (segments.Length != 3)
+            return false;
+        try
+        {
+            var payload = segments[1].Replace('-', '+').Replace('_', '/');
+            payload = payload.PadRight(payload.Length + (4 - payload.Length % 4) % 4, '=');
+            using var document = JsonDocument.Parse(Convert.FromBase64String(payload));
+            return document.RootElement.TryGetProperty("role", out var role) &&
+                   string.Equals(role.GetString(), "anon", StringComparison.Ordinal);
+        }
+        catch
+        {
+            return false;
+        }
+    }
 }
 
 internal sealed record SupabaseSession(

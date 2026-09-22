@@ -249,6 +249,14 @@ public partial class App : Application
 
     private static async Task TestSupabaseClientAsync()
     {
+        if (new SupabaseOptions
+            {
+                Url = "https://vminer-test.supabase.co",
+                PublishableKey = "sb_secret_must-never-be-accepted",
+            }.IsValid)
+            throw new InvalidOperationException(
+                "Supabase secret-key protection test failed.");
+
         var handler = new SupabaseTestHandler();
         using var client = new HttpClient(handler);
         var sessionStore = new MemorySupabaseSessionStore();
