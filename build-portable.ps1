@@ -5,7 +5,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 if ($Runtime -notmatch '^[a-z0-9-]+$') {
-    throw "Runtime invalide : $Runtime"
+    throw "Invalid runtime: $Runtime"
 }
 
 $projectRoot = [System.IO.Path]::GetFullPath((Split-Path -Parent $MyInvocation.MyCommand.Path))
@@ -17,7 +17,7 @@ function Assert-ChildPath([string]$Path, [string]$Parent) {
     $fullPath = [System.IO.Path]::GetFullPath($Path)
     $fullParent = [System.IO.Path]::GetFullPath($Parent).TrimEnd('\') + '\'
     if (-not $fullPath.StartsWith($fullParent, [System.StringComparison]::OrdinalIgnoreCase)) {
-        throw "Chemin hors du dossier autorisé : $fullPath"
+        throw "Path is outside the allowed directory: $fullPath"
     }
     return $fullPath
 }
@@ -35,24 +35,24 @@ dotnet publish $project `
     --output $staging
 
 if ($LASTEXITCODE -ne 0) {
-    throw "La publication de VMiner a échoué (code $LASTEXITCODE)."
+    throw "VMiner publish failed (exit code $LASTEXITCODE)."
 }
 
 $publishedExe = Join-Path $staging "VMiner.exe"
 if (-not (Test-Path -LiteralPath $publishedExe)) {
-    throw "La publication n'a pas produit VMiner.exe."
+    throw "The publish operation did not produce VMiner.exe."
 }
 
-# L'exécutable reste immédiatement visible à la racine du projet.
+# Keep the executable immediately visible in the repository root.
 Copy-Item -LiteralPath $publishedExe -Destination (Join-Path $projectRoot "VMiner.exe") -Force
 
-# Seuls les dossiers nécessaires au runtime sont remplacés. Le modèle déjà
-# téléchargé dans models/ est volontairement préservé entre les builds.
+# Replace only the runtime dependency folders. Preserve the model already
+# downloaded into models/ between builds.
 foreach ($directoryName in @("IpaDic", "runtimes")) {
     $source = Join-Path $staging $directoryName
     $destination = Assert-ChildPath (Join-Path $projectRoot $directoryName) $projectRoot
     if (-not (Test-Path -LiteralPath $source)) {
-        throw "Dépendance publiée manquante : $directoryName"
+        throw "Published dependency is missing: $directoryName"
     }
     if (Test-Path -LiteralPath $destination) {
         Remove-Item -LiteralPath $destination -Recurse -Force
@@ -73,4 +73,4 @@ if ((Test-Path -LiteralPath $artifactsRoot) -and
     Remove-Item -LiteralPath $artifactsRoot
 }
 
-Write-Host "VMiner portable prêt : $(Join-Path $projectRoot 'VMiner.exe')"
+Write-Host "VMiner portable build ready: $(Join-Path $projectRoot 'VMiner.exe')"

@@ -1,5 +1,5 @@
-Placez ici le modèle local :
+Place the local model here:
 
 translategemma-4b-it-Q4_K_M.gguf
 
-Le fichier GGUF est volontairement exclu du dépôt et doit rester à côté de l'application.
+The GGUF file is intentionally excluded from the repository and must remain next to the application.

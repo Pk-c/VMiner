@@ -1,90 +1,91 @@
 # VMiner
 
-VMiner lit le japonais directement à l'écran sous Windows : maintiens la touche de capture,
-déplace la souris jusqu'à l'autre coin de la zone, puis relâche la touche. Aucun clic n'est
-nécessaire.
+VMiner reads Japanese text directly from the screen on Windows. Hold the capture key,
+move the mouse to the opposite corner of the desired area, then release the key. No mouse
+click is required.
 
-La version 2 est une application native **C# / .NET 10 / WPF**. Elle est distribuable comme
-un dossier portable et fonctionne entièrement en local : capture, OCR, furigana et traduction
-japonais → anglais.
+Version 2 is a native **C# / .NET 10 / WPF** application distributed as a portable folder.
+Screen capture, OCR, furigana, Japanese-to-English translation, and vocabulary mining all
+run locally.
 
-## Utilisation
+## Usage
 
-1. Lance `VMiner.exe`.
-2. Place le curseur sur un coin du dialogue.
-3. Maintiens la touche configurée (Shift gauche par défaut), déplace la souris, puis relâche-la.
-4. VMiner affiche le texte japonais, ses furigana, sa lecture en kana et sa traduction anglaise.
-5. Survole puis clique un mot pour générer sa définition anglaise et l'ajouter à ta collection.
+1. Launch `VMiner.exe`.
+2. Place the pointer on one corner of the text area.
+3. Hold the configured key (Left Shift by default), move the pointer, then release the key.
+4. VMiner displays the Japanese text, furigana, kana reading, and English translation.
+5. Hover over and click a word to review its English definition and add it to your collection.
 
-Échap ou un clic droit annule une sélection. Le bouton **Minimize** garde VMiner visible dans
-la barre des tâches. Le bouton de fermeture Windows et **Exit** ferment réellement l'application.
+Press Escape or right-click to cancel a selection. **Minimize** keeps VMiner visible in the
+taskbar. The Windows close button and **Exit** both shut down the application completely.
 
-## Traduction locale
+## Local translation
 
-Le moteur utilise un modèle TranslateGemma 4B au format GGUF. Le modèle local est placé ici
-mais reste exclu du contrôle de version à cause de sa taille et de sa licence :
+The translation engine uses a TranslateGemma 4B model in GGUF format. Place the local model
+at the following path:
 
 ```text
 models\translategemma-4b-it-Q4_K_M.gguf
 ```
 
-Sans ce fichier, l'OCR et les furigana fonctionnent normalement et l'interface indique que la
-traduction est indisponible. Le modèle est chargé par LLamaSharp avec son backend Vulkan ;
-aucun texte n'est envoyé sur Internet.
+The model is excluded from version control because of its size and license. Without it, OCR
+and furigana remain available, and the interface reports that translation is unavailable.
+LLamaSharp loads the model through its Vulkan backend; no captured text is sent over the
+Internet.
 
-La langue est volontairement fixée à l'anglais pour garder l'interface et le moteur simples.
+English is currently the only translation target.
 
-## Collection de vocabulaire
+## Vocabulary collection
 
-Au premier lancement, VMiner demande où créer le fichier JSON de la collection. Son emplacement
-peut ensuite être modifié depuis la fenêtre principale. Chaque entrée contient la forme dictionnaire
-japonaise, sa lecture, une définition anglaise et autant de couples phrase japonaise / traduction
-anglaise que nécessaire. Les mots déjà présents sont fusionnés et reçoivent le nouvel exemple sans
-dupliquer les phrases existantes.
+On first launch, VMiner asks where to create the JSON vocabulary database. Its location can
+later be changed from the main window. Each entry contains a Japanese dictionary form, its
+reading, an English definition, and any number of Japanese sentence / English translation
+pairs. Existing words are merged with new examples, while identical sentence pairs are not
+duplicated.
 
-L'onglet **Collection** permet de rechercher dans tous les champs, modifier un mot et ses exemples,
-ou supprimer une entrée complète. Un double-clic ouvre également l'éditeur.
+The **Collection** tab can search every field, edit words and their examples, or remove a
+complete entry. Double-clicking an entry also opens the editor.
 
-## Compiler
+## Build
 
-Prérequis : SDK .NET 10 sous Windows 10 ou 11.
+Requirements: the .NET 10 SDK on Windows 10 or Windows 11.
 
 ```powershell
 dotnet build src\VMiner.App\VMiner.App.csproj -c Debug
 ```
 
-Test local de l'OCR, des furigana et de la traduction :
+Run the local OCR, furigana, translation, vocabulary, and database checks with:
 
 ```powershell
 VMiner.exe --self-test .\self-test.txt
 Get-Content .\self-test.txt
 ```
 
-## Reconstruire l'application portable
+## Build the portable application
 
 ```powershell
 .\build-portable.ps1
 ```
 
-Le script replace directement `VMiner.exe`, `IpaDic\` et `runtimes\` à la racine, tout en
-préservant le modèle déjà présent dans `models\`. L'ensemble est autonome : .NET n'a pas
-besoin d'être installé sur la machine cible.
+The script places `VMiner.exe`, `IpaDic\`, and `runtimes\` directly in the repository root
+while preserving the model already stored in `models\`. The resulting application is
+self-contained, so the target machine does not need a separate .NET installation.
 
-Pour distribuer VMiner, copie `VMiner.exe` avec les trois dossiers `IpaDic`, `models` et
-`runtimes`. Le dossier `src` et le script de build ne sont nécessaires que pour développer.
+To distribute VMiner, copy `VMiner.exe` together with the `IpaDic`, `models`, and `runtimes`
+folders. The `src` folder and build script are only required for development.
 
 ## Architecture
 
-| Élément | Implémentation locale |
+| Component | Local implementation |
 | --- | --- |
-| Interface | WPF sur .NET 10 |
-| Capture | hooks Win32 + capture GDI en mémoire |
-| OCR | moteur japonais intégré à Windows, image agrandie ×4 |
+| Interface | WPF on .NET 10 |
+| Capture | Win32 hooks and in-memory GDI capture |
+| OCR | Japanese OCR built into Windows, with 4× image scaling |
 | Furigana | Kawazu / MeCab |
-| Segmentation | MeCab IPA, avec forme dictionnaire et lecture |
-| Traduction | TranslateGemma GGUF via LLamaSharp |
-| Collection | fichier JSON choisi par l'utilisateur |
-| Configuration | `config.json` à côté de l'exécutable |
+| Segmentation | MeCab IPA with dictionary forms and readings |
+| Translation | TranslateGemma GGUF through LLamaSharp |
+| Collection | User-selected JSON file |
+| Configuration | `config.json` next to the executable |
 
-Le dossier principal du port est `src\VMiner.App`. La capture et l'analyse restent en mémoire ;
-aucune image temporaire n'est écrite sur le disque.
+The main project is located in `src\VMiner.App`. Captures and analysis stay in memory; no
+temporary screenshots are written to disk.

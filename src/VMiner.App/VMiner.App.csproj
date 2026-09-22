@@ -14,8 +14,8 @@
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
-    <!-- Les assemblies .NET sont fusionnées dans VMiner.exe. Les bibliothèques
-         llama.cpp restent dans runtimes/ afin que LLamaSharp puisse les charger. -->
+    <!-- Merge the .NET assemblies into VMiner.exe. Keep the llama.cpp libraries
+         in runtimes/ so LLamaSharp can load them. -->
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <PublishTrimmed>false</PublishTrimmed>
     <DebugType>embedded</DebugType>
@@ -27,8 +27,8 @@
     <PackageReference Include="LLamaSharp.Backend.Vulkan.Windows" Version="0.27.0" />
   </ItemGroup>
 
-  <!-- Kawazu cherche son dictionnaire MeCab dans IpaDic au runtime. Le package
-       NuGet ne copie pas correctement ces contentFiles pour net10.0. -->
+  <!-- Kawazu looks for its MeCab dictionary in IpaDic at runtime. The NuGet
+       package does not copy these contentFiles correctly for net10.0. -->
   <ItemGroup>
     <Content Include="$(NuGetPackageRoot)kawazu\1.1.4\content\*">
       <Link>IpaDic\%(Filename)%(Extension)</Link>
@@ -48,8 +48,8 @@
     <Resource Include="img\icon.png;img\mining.gif" />
   </ItemGroup>
 
-  <!-- Les DLL natives WPF sont intégrées dans l'exécutable. LLamaSharp détecte
-       ses backends uniquement lorsqu'ils restent visibles sous runtimes/. -->
+  <!-- Embed the native WPF DLLs in the executable. LLamaSharp detects its
+       backends only when they remain visible under runtimes/. -->
   <ItemGroup>
     <LlamaNativeLibrary Include="$(NuGetPackageRoot)llamasharp.backend.cpu\0.27.0\LLamaSharpRuntimes\win-x64\native\**\*;
                                  $(NuGetPackageRoot)llamasharp.backend.vulkan.windows\0.27.0\LLamaSharpRuntimes\win-x64\native\**\*" />
