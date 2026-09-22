@@ -27,6 +27,7 @@ public partial class EditVocabularyWindow : Window
         DefinitionBox.Text = entry.Definition;
         _examples = new ObservableCollection<SentencePair>(entry.Examples.Select(example => new SentencePair
         {
+            Id = example.Id,
             Japanese = example.Japanese,
             English = example.English,
         }));

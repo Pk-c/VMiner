@@ -8,6 +8,7 @@ public sealed class VocabularyDatabase
 
 public sealed class VocabularyEntry
 {
+    public Guid Id { get; set; }
     public string Word { get; set; } = "";
     public string Reading { get; set; } = "";
     public string Definition { get; set; } = "";
@@ -20,6 +21,7 @@ public sealed class VocabularyEntry
 
 public sealed class SentencePair
 {
+    public Guid Id { get; set; }
     public string Japanese { get; set; } = "";
     public string English { get; set; } = "";
 }

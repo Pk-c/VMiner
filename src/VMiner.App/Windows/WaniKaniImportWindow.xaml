@@ -1,0 +1,115 @@
+<Window x:Class="VMiner.Windows.WaniKaniImportWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="WaniKani setup" Width="650" Height="620"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
+        Background="{StaticResource BackgroundBrush}"
+        ShowInTaskbar="False">
+    <Grid Margin="26" Background="{StaticResource BackgroundBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="64" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Border Width="52" Height="52" CornerRadius="11"
+                    Background="#F7F8FF" BorderBrush="#3856EF" BorderThickness="1">
+                <Image Source="pack://application:,,,/img/wanikani.png"
+                       Width="44" Height="44"
+                       RenderOptions.BitmapScalingMode="HighQuality" />
+            </Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock Text="WANIKANI SETUP" FontSize="11" FontWeight="SemiBold"
+                           Foreground="#7891FF" />
+                <TextBlock Margin="0,4,0,0" Text="Connect your vocabulary"
+                           FontSize="23" FontWeight="SemiBold" />
+                <TextBlock Margin="0,5,0,0" TextWrapping="Wrap"
+                           Foreground="{StaticResource MutedBrush}"
+                           Text="Import studied vocabulary and context sentences, then use Update from the Collection screen whenever you want to synchronize again." />
+            </StackPanel>
+        </Grid>
+
+        <Border Grid.Row="2" Margin="0,13,0,0" Padding="17" CornerRadius="10"
+                Background="{StaticResource PanelBrush}"
+                BorderBrush="#3856EF" BorderThickness="1">
+            <StackPanel>
+                <TextBlock Text="2  ·  Input your API token"
+                           FontSize="15" FontWeight="SemiBold" />
+                <TextBlock Margin="0,5,0,0" TextWrapping="Wrap" FontSize="12"
+                           Foreground="{StaticResource MutedBrush}"
+                           Text="Use a dedicated read-only token. It will be encrypted for your Windows account and is never sent to Supabase." />
+                <Grid Margin="0,13,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <PasswordBox x:Name="TokenBox" MinHeight="40" Padding="11,7"
+                                 PasswordChar="●" PasswordChanged="TokenChanged"
+                                 Background="{StaticResource InputBrush}"
+                                 Foreground="{StaticResource ForegroundBrush}"
+                                 BorderBrush="{StaticResource BorderBrush}"
+                                 BorderThickness="1"
+                                 AutomationProperties.Name="WaniKani read-only API token" />
+                    <Button x:Name="ImportButton" Grid.Column="1" Margin="10,0,0,0"
+                            Content="Save &amp; import" IsEnabled="False"
+                            Style="{StaticResource AccentButtonStyle}"
+                            Click="ImportClicked" />
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <Border Grid.Row="1" Margin="0,22,0,0" Padding="17" CornerRadius="10"
+                Background="{StaticResource PanelBrush}"
+                BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Margin="0,0,16,0">
+                    <TextBlock Text="1  ·  How to create a token"
+                               FontSize="15" FontWeight="SemiBold" />
+                    <TextBlock Margin="0,7,0,0" TextWrapping="Wrap" FontSize="12"
+                               Foreground="{StaticResource MutedBrush}">
+                        <Run Text="Open WaniKani API Tokens, choose Generate a new token, give it a name such as VMiner, and leave every permission unchecked to keep it read-only." />
+                    </TextBlock>
+                </StackPanel>
+                <Button Grid.Column="1" Content="Create token"
+                        VerticalAlignment="Center" Click="OpenTokenPageClicked" />
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="3" Margin="0,13,0,0" Padding="15" CornerRadius="9"
+                Background="{StaticResource AccentTintBrush}"
+                BorderBrush="{StaticResource AccentBorderBrush}" BorderThickness="1">
+            <StackPanel VerticalAlignment="Center">
+                <ProgressBar x:Name="ImportProgress" Height="7" Minimum="0" Maximum="100"
+                             Visibility="Collapsed"
+                             Foreground="{StaticResource AccentBrush}"
+                             Background="{StaticResource PanelRaisedBrush}" />
+                <TextBlock x:Name="ImportStatus" Margin="0,9,0,0" TextWrapping="Wrap"
+                           Foreground="{StaticResource WarmTextBrush}"
+                           Text="Enter your token to enable the import button." />
+            </StackPanel>
+        </Border>
+
+        <Grid Grid.Row="4" Margin="0,18,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock VerticalAlignment="Center" FontSize="11"
+                       Foreground="{StaticResource MutedBrush}"
+                       Text="VMiner is not affiliated with WaniKani or Tofugu." />
+            <Button x:Name="CloseButton" Grid.Column="1" Content="Close"
+                    Click="CloseClicked" />
+        </Grid>
+    </Grid>
+</Window>

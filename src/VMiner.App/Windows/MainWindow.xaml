@@ -174,6 +174,7 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
                         <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="SETTINGS"
@@ -207,10 +208,21 @@
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
-                                <Ellipse x:Name="ModelStatusIndicator" Width="9" Height="9"
-                                         Margin="0,2,11,0" VerticalAlignment="Top"
-                                         Fill="{StaticResource SuccessBrush}" />
-                                <StackPanel Grid.Column="1">
+                                <Grid Width="42" Height="42" Margin="0,0,12,0"
+                                      VerticalAlignment="Top">
+                                    <Border CornerRadius="9" Background="#E6EEFF"
+                                            BorderBrush="#6688F8" BorderThickness="1">
+                                        <Image Source="pack://application:,,,/img/gemma.png"
+                                               Width="34" Height="34"
+                                               RenderOptions.BitmapScalingMode="HighQuality" />
+                                    </Border>
+                                    <Ellipse x:Name="ModelStatusIndicator" Width="10" Height="10"
+                                             HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                             Margin="0,0,-2,-2"
+                                             Stroke="{StaticResource InputBrush}" StrokeThickness="2"
+                                             Fill="{StaticResource SuccessBrush}" />
+                                </Grid>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                     <TextBlock Text="Local English translation" FontWeight="SemiBold" />
                                     <TextBlock x:Name="ModelStatusText" Margin="0,2,0,0"
                                                FontSize="12" Foreground="{StaticResource MutedBrush}" />
@@ -258,18 +270,70 @@
                                 BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
                             <Grid>
                                 <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <StackPanel VerticalAlignment="Center">
+                                <Border Width="42" Height="42" CornerRadius="9"
+                                        Margin="0,0,12,0" VerticalAlignment="Center"
+                                        Background="{StaticResource AccentTintBrush}"
+                                        BorderBrush="{StaticResource AccentBorderBrush}"
+                                        BorderThickness="1">
+                                    <TextBlock Text="⛏" FontFamily="Segoe UI Symbol"
+                                               FontSize="23" HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"
+                                               Foreground="{StaticResource AccentBrush}" />
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                     <TextBlock Text="VMiner account" FontWeight="SemiBold" />
                                     <TextBlock x:Name="VocabularyStatusText" Margin="0,2,12,0"
                                                FontSize="12" Foreground="{StaticResource MutedBrush}"
                                                TextTrimming="CharacterEllipsis" />
                                 </StackPanel>
-                                <Button x:Name="AccountButton" Grid.Column="1"
+                                <Button x:Name="AccountButton" Grid.Column="2"
                                         Content="Sign in"
                                         Click="AccountClicked" />
+                            </Grid>
+                        </Border>
+
+                        <Border Grid.Row="6" Grid.ColumnSpan="2" Margin="0,10,0,0"
+                                Padding="13" CornerRadius="9"
+                                Background="{StaticResource AccentTintBrush}"
+                                BorderBrush="{StaticResource AccentBorderBrush}" BorderThickness="1">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="54" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Border Width="42" Height="42" CornerRadius="8"
+                                        HorizontalAlignment="Left" VerticalAlignment="Center"
+                                        Background="#F7F8FF" BorderBrush="#3856EF" BorderThickness="1">
+                                    <Image Source="pack://application:,,,/img/wanikani.png"
+                                           Width="36" Height="36"
+                                           RenderOptions.BitmapScalingMode="HighQuality" />
+                                </Border>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,15,0">
+                                    <TextBlock Text="WaniKani synchronization" FontWeight="SemiBold"
+                                               Foreground="{StaticResource WarmTextBrush}" />
+                                    <TextBlock x:Name="WaniKaniStatusText" Margin="0,3,0,0"
+                                               FontSize="11" TextWrapping="Wrap"
+                                               Foreground="{StaticResource MutedBrush}" />
+                                    <ProgressBar x:Name="WaniKaniProgress" Margin="0,7,0,0"
+                                                 Height="5" Minimum="0" Maximum="100"
+                                                 Visibility="Collapsed"
+                                                 Foreground="{StaticResource AccentBrush}"
+                                                 Background="{StaticResource PanelRaisedBrush}" />
+                                </StackPanel>
+                                <Button x:Name="WaniKaniSetupButton" Grid.Column="2"
+                                        Content="Setup" Click="SetupWaniKaniClicked"
+                                        VerticalAlignment="Center" />
+                                <Button x:Name="WaniKaniUpdateButton" Grid.Column="3"
+                                        Content="Update now" Click="UpdateWaniKaniClicked"
+                                        Style="{StaticResource AccentButtonStyle}"
+                                        IsEnabled="False" Margin="9,0,0,0"
+                                        VerticalAlignment="Center" />
                             </Grid>
                         </Border>
                     </Grid>

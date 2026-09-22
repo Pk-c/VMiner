@@ -44,8 +44,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Remove="img\icon.png;img\mining.gif" />
-    <Resource Include="img\icon.png;img\mining.gif" />
+    <None Remove="img\gemma.png;img\icon.png;img\mining.gif;img\wanikani.png" />
+    <Resource Include="img\gemma.png;img\icon.png;img\mining.gif;img\wanikani.png" />
   </ItemGroup>
 
   <!-- Embed the native WPF DLLs in the executable. LLamaSharp detects its

@@ -18,6 +18,7 @@ public partial class MainWindow : Window
     private readonly SupabaseAuthService _supabaseAuth;
     private readonly SupabaseVocabularyBackend _supabaseVocabulary;
     private readonly VocabularyStore _vocabularyStore;
+    private readonly IWaniKaniTokenStore _waniKaniTokenStore;
     private readonly GlobalCaptureService _capture;
     private readonly ResultWindow _resultWindow;
     private readonly ModelDownloadService _modelDownloader = new();
@@ -30,6 +31,7 @@ public partial class MainWindow : Window
     private bool _reallyClosing;
     private bool _shutdownStarted;
     private bool _modelDownloadInProgress;
+    private bool _waniKaniSyncInProgress;
 
     public MainWindow() : this(false)
     {
@@ -48,12 +50,13 @@ public partial class MainWindow : Window
         _supabaseAuth = new SupabaseAuthService();
         _supabaseVocabulary = new SupabaseVocabularyBackend(_supabaseAuth);
         _vocabularyStore = new VocabularyStore(_supabaseVocabulary);
+        _waniKaniTokenStore = new EncryptedWaniKaniTokenStore();
         _resultWindow = new ResultWindow(
             _config, _analysis.Translation, _vocabularyStore);
         _resultWindow.VocabularyChanged += async (_, _) =>
         {
             if (MainTabs.SelectedItem == CollectionTab)
-                await RefreshCollectionAsync();
+                await RefreshCollectionAsync(false);
         };
         _capture = new GlobalCaptureService(Dispatcher, () => _config);
         _capture.RegionCaptured += CaptureReceived;
@@ -68,7 +71,7 @@ public partial class MainWindow : Window
     internal async Task<int> TestCollectionTabAsync()
     {
         MainTabs.SelectedItem = CollectionTab;
-        await RefreshCollectionAsync();
+        await RefreshCollectionAsync(false);
         UpdateLayout();
         return CollectionList.Items.Count;
     }
@@ -279,7 +282,7 @@ public partial class MainWindow : Window
                 ? "Signed in — the previous local collection was imported."
                 : "Signed in — your vocabulary collection is synchronized.";
             if (MainTabs.SelectedItem == CollectionTab)
-                await RefreshCollectionAsync();
+                await RefreshCollectionAsync(false);
         }
         catch (OperationCanceledException)
         {
@@ -337,36 +340,184 @@ public partial class MainWindow : Window
                 $"Place supabase-config.json next to VMiner.exe:\n{SupabaseAuthService.ConfigurationPath}";
             AccountButton.Content = "Setup required";
             AccountButton.IsEnabled = false;
-            return;
-        }
-
-        VocabularyStatusText.ToolTip = "Your vocabulary is private to your VMiner account.";
-        AccountButton.IsEnabled = true;
-        if (_supabaseAuth.IsAuthenticated)
-        {
-            VocabularyStatusText.Text = string.IsNullOrWhiteSpace(_supabaseAuth.Email)
-                ? "Signed in • collection synchronized"
-                : $"Signed in as {_supabaseAuth.Email}";
-            AccountButton.Content = "Log out";
         }
         else
         {
-            VocabularyStatusText.Text = "Not signed in — connect or create an account";
-            AccountButton.Content = "Sign in";
+            VocabularyStatusText.ToolTip = "Your vocabulary is private to your VMiner account.";
+            AccountButton.IsEnabled = true;
+            if (_supabaseAuth.IsAuthenticated)
+            {
+                VocabularyStatusText.Text = string.IsNullOrWhiteSpace(_supabaseAuth.Email)
+                    ? "Signed in • collection synchronized"
+                    : $"Signed in as {_supabaseAuth.Email}";
+                AccountButton.Content = "Log out";
+            }
+            else
+            {
+                VocabularyStatusText.Text = "Not signed in — connect or create an account";
+                AccountButton.Content = "Sign in";
+            }
         }
+
+        UpdateWaniKaniIntegrationStatus();
+    }
+
+    private void UpdateWaniKaniIntegrationStatus()
+    {
+        if (_waniKaniSyncInProgress)
+        {
+            WaniKaniSetupButton.IsEnabled = false;
+            WaniKaniUpdateButton.IsEnabled = false;
+            return;
+        }
+
+        var signedIn = _supabaseAuth.IsConfigured && _supabaseAuth.IsAuthenticated;
+        var userId = _supabaseAuth.UserId;
+        WaniKaniSetupButton.IsEnabled = signedIn;
+        WaniKaniUpdateButton.IsEnabled = signedIn && userId is not null &&
+                                          _waniKaniTokenStore.HasToken(userId);
+        WaniKaniProgress.Visibility = Visibility.Collapsed;
+
+        WaniKaniStatusText.Text = !signedIn
+            ? "Sign in to VMiner to configure WaniKani synchronization."
+            : userId is not null && _waniKaniTokenStore.HasToken(userId)
+                ? "Configured — Update imports newly studied vocabulary."
+                : "Not configured — select Setup to connect a read-only token.";
     }
 
     private async void MainTabsChanged(object sender, SelectionChangedEventArgs e)
     {
         if (!IsLoaded || e.Source != MainTabs || MainTabs.SelectedItem != CollectionTab)
             return;
-        await RefreshCollectionAsync();
+        await RefreshCollectionAsync(true);
     }
 
     private async void RefreshCollectionClicked(object sender, RoutedEventArgs e) =>
-        await RefreshCollectionAsync();
+        await RefreshCollectionAsync(true);
 
-    private async Task RefreshCollectionAsync()
+    private async void SetupWaniKaniClicked(object sender, RoutedEventArgs e)
+    {
+        if (!_vocabularyStore.IsConfigured)
+        {
+            MessageBox.Show(this,
+                "Sign in to your VMiner account before importing WaniKani vocabulary.",
+                "VMiner", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var dialog = new WaniKaniImportWindow(
+            _vocabularyStore,
+            _waniKaniTokenStore,
+            _supabaseAuth.UserId!) { Owner = this };
+        if (dialog.ShowDialog() == true)
+        {
+            StatusText.Text = string.IsNullOrWhiteSpace(dialog.Username)
+                ? "WaniKani setup complete."
+                : $"WaniKani setup complete for {dialog.Username}.";
+            await RefreshCollectionAsync(false);
+        }
+        UpdateWaniKaniIntegrationStatus();
+    }
+
+    private async void UpdateWaniKaniClicked(object sender, RoutedEventArgs e)
+    {
+        if (!_vocabularyStore.IsConfigured || _waniKaniSyncInProgress)
+            return;
+
+        var userId = _supabaseAuth.UserId!;
+        string? token;
+        try
+        {
+            token = await _waniKaniTokenStore.LoadAsync(
+                userId, _lifetimeCancellation.Token);
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                await _waniKaniTokenStore.ClearAsync(userId, _lifetimeCancellation.Token);
+                UpdateWaniKaniIntegrationStatus();
+                MessageBox.Show(this,
+                    "The saved WaniKani token could not be read. Run Setup again.",
+                    "VMiner", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception exception)
+        {
+            WaniKaniStatusText.Text = "The saved token could not be read.";
+            MessageBox.Show(this, exception.Message, "WaniKani update",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
+        }
+
+        _waniKaniSyncInProgress = true;
+        WaniKaniProgress.Visibility = Visibility.Visible;
+        WaniKaniProgress.IsIndeterminate = true;
+        WaniKaniStatusText.Text = "Connecting to WaniKani…";
+        UpdateWaniKaniIntegrationStatus();
+        var progress = new Progress<WaniKaniImportProgress>(UpdateWaniKaniProgress);
+
+        try
+        {
+            WaniKaniFetchResult fetched;
+            using (var service = new WaniKaniImportService())
+            {
+                fetched = await service.FetchStudiedVocabularyAsync(
+                    token!, progress, _lifetimeCancellation.Token);
+            }
+
+            var result = await _vocabularyStore.ImportWaniKaniAsync(
+                fetched.Entries, progress, _lifetimeCancellation.Token);
+            WaniKaniProgress.IsIndeterminate = false;
+            WaniKaniProgress.Value = 100;
+            WaniKaniStatusText.Text =
+                $"Updated for {fetched.Username}: {result.NewEntries:N0} new words and " +
+                $"{result.NewExamples:N0} new examples.";
+            StatusText.Text = "WaniKani vocabulary synchronized.";
+            await RefreshCollectionAsync(false);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception)
+        {
+            WaniKaniStatusText.Text = "Update failed — " + exception.Message;
+            StatusText.Text = "WaniKani synchronization failed.";
+            MessageBox.Show(this, exception.Message, "WaniKani update",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            token = "";
+            _waniKaniSyncInProgress = false;
+            WaniKaniProgress.Visibility = Visibility.Collapsed;
+            WaniKaniProgress.IsIndeterminate = false;
+            WaniKaniProgress.Value = 0;
+            WaniKaniSetupButton.IsEnabled = _supabaseAuth.IsAuthenticated;
+            WaniKaniUpdateButton.IsEnabled =
+                _supabaseAuth.IsAuthenticated && _supabaseAuth.UserId is not null &&
+                _waniKaniTokenStore.HasToken(_supabaseAuth.UserId);
+        }
+    }
+
+    private void UpdateWaniKaniProgress(WaniKaniImportProgress progress)
+    {
+        WaniKaniStatusText.Text = progress.Message;
+        if (progress.Total is > 0)
+        {
+            WaniKaniProgress.IsIndeterminate = false;
+            WaniKaniProgress.Maximum = progress.Total.Value;
+            WaniKaniProgress.Value = Math.Min(progress.Completed, progress.Total.Value);
+        }
+        else
+        {
+            WaniKaniProgress.IsIndeterminate = true;
+        }
+    }
+
+    private async Task RefreshCollectionAsync(bool reloadFromCloud)
     {
         EditEntryButton.IsEnabled = false;
         RemoveEntryButton.IsEnabled = false;
@@ -381,6 +532,8 @@ public partial class MainWindow : Window
         try
         {
             CollectionStatusText.Text = "Loading collection…";
+            if (reloadFromCloud)
+                await _vocabularyStore.ReloadAsync(_lifetimeCancellation.Token);
             _collectionEntries = await _vocabularyStore.GetAllAsync();
             ApplyCollectionFilter();
         }
@@ -441,7 +594,7 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog() == true)
         {
             StatusText.Text = $"{entry.Word} updated.";
-            await RefreshCollectionAsync();
+            await RefreshCollectionAsync(false);
         }
     }
 
@@ -459,7 +612,7 @@ public partial class MainWindow : Window
         {
             await _vocabularyStore.DeleteAsync(entry.Word, entry.Reading);
             StatusText.Text = $"{entry.Word} removed from the collection.";
-            await RefreshCollectionAsync();
+            await RefreshCollectionAsync(false);
         }
         catch (Exception exception)
         {

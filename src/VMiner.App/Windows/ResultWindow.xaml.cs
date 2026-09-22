@@ -58,7 +58,7 @@ public partial class ResultWindow : Window
 
     internal (int FrameCount, bool IsPlaying) TestMiningAnimation()
     {
-        ShowPending("Mining vocabulary…");
+        ShowPending("Reading Japanese text…");
         UpdateLayout();
         return (MiningAnimation.FrameCount, MiningAnimation.IsPlaying);
     }
@@ -66,10 +66,7 @@ public partial class ResultWindow : Window
     private void SetLoadingMessage(string message)
     {
         LoadingText.Text = message;
-        MiningAnimation.Visibility = string.Equals(
-            message, "Mining vocabulary…", StringComparison.Ordinal)
-            ? Visibility.Visible
-            : Visibility.Collapsed;
+        MiningAnimation.Visibility = Visibility.Visible;
     }
 
     public void ShowError(string message)

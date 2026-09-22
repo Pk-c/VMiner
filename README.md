@@ -51,9 +51,11 @@ deleting the cloud collection.
 
 Each entry contains a Japanese dictionary form, its reading, an English definition, and any
 number of Japanese sentence / English translation pairs. Existing words are merged with new
-examples, while identical sentence pairs are not duplicated. VMiner downloads and updates
-the database directly in memory; it does not keep a local database copy. The Supabase session
-is the only account data stored locally and is encrypted for the current Windows user.
+examples, while identical sentence pairs are not duplicated. Supabase stores words and
+sentence examples in separate relational tables. VMiner loads the collection into memory at
+sign-in, then sends only the entry being changed; it does not keep a local database copy. The
+Supabase session and an optional WaniKani token are the only account data stored locally;
+both are encrypted for the current Windows user.
 
 When upgrading from a version that used a local JSON database, VMiner imports that collection
 once if the Supabase collection is empty. The original local file is left untouched as a
@@ -62,14 +64,32 @@ backup.
 The **Collection** tab can search every field, edit words and their examples, or remove a
 complete entry. Double-clicking an entry also opens the editor.
 
+### Import from WaniKani
+
+Use **Setup** in the WaniKani section of the Collection tab to connect a dedicated read-only
+API token and import vocabulary whose lessons have been started. VMiner validates the token,
+then encrypts it for the current Windows user with DPAPI and isolates it by VMiner account.
+The token is stored only on that computer and is never sent to Supabase.
+
+Use **Update now** whenever you want to synchronize newly studied vocabulary. The button is
+enabled only after setup has completed successfully.
+
+Existing VMiner definitions are preserved, identical sentence pairs are skipped, and only
+new words or missing WaniKani context sentences are added. Imports are uploaded to Supabase
+in bounded batches. WaniKani content remains subject to the user's WaniKani subscription,
+terms, and `max_level_granted`; VMiner is not affiliated with WaniKani or Tofugu.
+
 ## Supabase setup
 
 The distributed application needs one Supabase project shared by every VMiner account:
 
 1. Create a Supabase project.
-2. Open the project's SQL Editor and run `supabase-setup.sql` once. It creates the JSONB
-   vocabulary table, enables Row Level Security, and restricts each row to its authenticated
-   owner.
+2. Open the project's SQL Editor and run `supabase-setup.sql`. It creates the relational
+   `vocabulary_entries` and `sentence_examples` tables, enables Row Level Security, and
+   restricts every row to its authenticated owner. If the old JSONB table exists, the script
+   migrates its contents transactionally before removing it. Rerun the current script when
+   upgrading an existing relational installation so the WaniKani import columns and batch
+   function are installed.
 3. Copy the project URL and **publishable** key from the project's Connect dialog.
 4. Copy `supabase-config.example.json` to `supabase-config.json`, replace its placeholders,
    and place it next to `VMiner.exe`.
@@ -122,7 +142,8 @@ script are only required for development.
 | Segmentation | MeCab IPA with dictionary forms and readings |
 | Translation | TranslateGemma GGUF through LLamaSharp |
 | Accounts | Supabase Auth with email and password |
-| Collection | Supabase Postgres JSONB protected by Row Level Security |
+| Collection | Relational Supabase Postgres tables protected by Row Level Security |
+| WaniKani import | Read-only WaniKani API v2 client with manual batch synchronization |
 | Configuration | `config.json` next to the executable |
 
 The main project is located in `src\VMiner.App`. Captures and analysis stay in memory; no

@@ -6,6 +6,7 @@ public sealed class VocabularyStore
 {
     private readonly IVocabularyDatabaseBackend _backend;
     private readonly SemaphoreSlim _gate = new(1, 1);
+    private VocabularyDatabase _database = new();
 
     internal VocabularyStore(IVocabularyDatabaseBackend backend)
     {
@@ -14,7 +15,10 @@ public sealed class VocabularyStore
 
     public bool IsConfigured => _backend.IsConnected;
 
-    public async Task InitializeAsync(CancellationToken cancellationToken = default)
+    public Task InitializeAsync(CancellationToken cancellationToken = default) =>
+        ReloadAsync(cancellationToken);
+
+    public async Task ReloadAsync(CancellationToken cancellationToken = default)
     {
         if (!IsConfigured)
             return;
@@ -22,7 +26,7 @@ public sealed class VocabularyStore
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await _backend.LoadAsync(cancellationToken).ConfigureAwait(false);
+            _database = await _backend.LoadAsync(cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -41,10 +45,7 @@ public sealed class VocabularyStore
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var database = await _backend.LoadAsync(cancellationToken).ConfigureAwait(false);
-            var entry = database.Entries.FirstOrDefault(item =>
-                string.Equals(item.Word, word, StringComparison.Ordinal) &&
-                string.Equals(item.Reading, reading, StringComparison.Ordinal));
+            var entry = FindEntry(word, reading);
             return entry is null ? null : CloneEntry(entry);
         }
         finally
@@ -62,8 +63,7 @@ public sealed class VocabularyStore
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var database = await _backend.LoadAsync(cancellationToken).ConfigureAwait(false);
-            return database.Entries
+            return _database.Entries
                 .OrderBy(entry => entry.Word, StringComparer.Ordinal)
                 .Select(CloneEntry)
                 .ToArray();
@@ -84,32 +84,37 @@ public sealed class VocabularyStore
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var database = await _backend.LoadAsync(cancellationToken).ConfigureAwait(false);
-            var entry = database.Entries.FirstOrDefault(item =>
-                string.Equals(item.Word, originalWord, StringComparison.Ordinal) &&
-                string.Equals(item.Reading, originalReading, StringComparison.Ordinal))
+            var entry = FindEntry(originalWord, originalReading)
                 ?? throw new InvalidOperationException("The vocabulary entry no longer exists.");
-            var duplicate = database.Entries.Any(item => !ReferenceEquals(item, entry) &&
+            var duplicate = _database.Entries.Any(item => item.Id != entry.Id &&
                 string.Equals(item.Word, updatedEntry.Word, StringComparison.Ordinal) &&
                 string.Equals(item.Reading, updatedEntry.Reading, StringComparison.Ordinal));
             if (duplicate)
                 throw new InvalidOperationException(
                     "Another entry already uses this word and reading.");
 
-            entry.Word = updatedEntry.Word;
-            entry.Reading = updatedEntry.Reading;
-            entry.Definition = updatedEntry.Definition;
-            entry.Examples = updatedEntry.Examples
-                .Where(example => !string.IsNullOrWhiteSpace(example.Japanese) ||
-                                  !string.IsNullOrWhiteSpace(example.English))
-                .Select(example => new SentencePair
-                {
-                    Japanese = example.Japanese.Trim(),
-                    English = example.English.Trim(),
-                })
-                .DistinctBy(example => (example.Japanese, example.English))
-                .ToList();
-            await _backend.SaveAsync(database, cancellationToken).ConfigureAwait(false);
+            var replacement = new VocabularyEntry
+            {
+                Id = entry.Id,
+                Word = updatedEntry.Word.Trim(),
+                Reading = updatedEntry.Reading.Trim(),
+                Definition = updatedEntry.Definition.Trim(),
+                Examples = updatedEntry.Examples
+                    .Where(example => !string.IsNullOrWhiteSpace(example.Japanese) ||
+                                      !string.IsNullOrWhiteSpace(example.English))
+                    .Select(example => new SentencePair
+                    {
+                        Id = example.Id,
+                        Japanese = example.Japanese.Trim(),
+                        English = example.English.Trim(),
+                    })
+                    .DistinctBy(example => (example.Japanese, example.English))
+                    .ToList(),
+            };
+            await _backend.ReplaceAsync(entry.Id, replacement, cancellationToken)
+                .ConfigureAwait(false);
+            var index = _database.Entries.IndexOf(entry);
+            _database.Entries[index] = CloneEntry(replacement);
         }
         finally
         {
@@ -128,11 +133,11 @@ public sealed class VocabularyStore
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var database = await _backend.LoadAsync(cancellationToken).ConfigureAwait(false);
-            database.Entries.RemoveAll(entry =>
-                string.Equals(entry.Word, word, StringComparison.Ordinal) &&
-                string.Equals(entry.Reading, reading, StringComparison.Ordinal));
-            await _backend.SaveAsync(database, cancellationToken).ConfigureAwait(false);
+            var entry = FindEntry(word, reading);
+            if (entry is null)
+                return;
+            await _backend.DeleteAsync(entry.Id, cancellationToken).ConfigureAwait(false);
+            _database.Entries.Remove(entry);
         }
         finally
         {
@@ -149,19 +154,26 @@ public sealed class VocabularyStore
         CancellationToken cancellationToken = default)
     {
         EnsureConnected();
+        word = word.Trim();
+        reading = reading.Trim();
+        definition = definition.Trim();
+        japaneseSentence = japaneseSentence.Trim();
+        englishSentence = englishSentence.Trim();
+
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var database = await _backend.LoadAsync(cancellationToken).ConfigureAwait(false);
-            var entry = database.Entries.FirstOrDefault(item =>
-                string.Equals(item.Word, word, StringComparison.Ordinal) &&
-                string.Equals(item.Reading, reading, StringComparison.Ordinal));
+            var entryId = await _backend.AddOrUpdateAsync(
+                word, reading, definition, japaneseSentence, englishSentence, cancellationToken)
+                .ConfigureAwait(false);
+            var entry = FindEntry(word, reading);
             if (entry is null)
             {
-                entry = new VocabularyEntry { Word = word, Reading = reading };
-                database.Entries.Add(entry);
+                entry = new VocabularyEntry { Id = entryId, Word = word, Reading = reading };
+                _database.Entries.Add(entry);
             }
 
+            entry.Id = entryId;
             entry.Definition = definition;
             if (!string.IsNullOrWhiteSpace(japaneseSentence) &&
                 !entry.ContainsExample(japaneseSentence, englishSentence))
@@ -172,14 +184,40 @@ public sealed class VocabularyStore
                     English = englishSentence,
                 });
             }
-
-            await _backend.SaveAsync(database, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
             _gate.Release();
         }
     }
+
+    public async Task<VocabularyImportResult> ImportWaniKaniAsync(
+        IReadOnlyList<WaniKaniVocabularyItem> entries,
+        IProgress<WaniKaniImportProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureConnected();
+        if (entries.Count == 0)
+            return new VocabularyImportResult(0, 0, 0);
+
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var result = await _backend.ImportWaniKaniAsync(
+                entries, progress, cancellationToken).ConfigureAwait(false);
+            _database = await _backend.LoadAsync(cancellationToken).ConfigureAwait(false);
+            return result;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private VocabularyEntry? FindEntry(string word, string reading) =>
+        _database.Entries.FirstOrDefault(item =>
+            string.Equals(item.Word, word, StringComparison.Ordinal) &&
+            string.Equals(item.Reading, reading, StringComparison.Ordinal));
 
     private void EnsureConnected()
     {
@@ -190,11 +228,13 @@ public sealed class VocabularyStore
 
     private static VocabularyEntry CloneEntry(VocabularyEntry entry) => new()
     {
+        Id = entry.Id,
         Word = entry.Word,
         Reading = entry.Reading,
         Definition = entry.Definition,
         Examples = entry.Examples.Select(example => new SentencePair
         {
+            Id = example.Id,
             Japanese = example.Japanese,
             English = example.English,
         }).ToList(),

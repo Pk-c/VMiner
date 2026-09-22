@@ -155,8 +155,7 @@
                             VerticalAlignment="Center">
                     <controls:MiningAnimation x:Name="MiningAnimation"
                                               Width="118" Height="121"
-                                              Margin="0,0,0,12"
-                                              Visibility="Collapsed" />
+                                              Margin="0,0,0,12" />
                     <TextBlock x:Name="LoadingText" Text="Mining…"
                                HorizontalAlignment="Center" FontSize="15"
                                FontWeight="SemiBold" Foreground="{StaticResource ForegroundBrush}" />
